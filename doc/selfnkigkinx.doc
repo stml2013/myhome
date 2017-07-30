@@ -1,0 +1,320 @@
+usr nobody
+
+worker_processes 2;
+error_log  /var/log/nginx/error.log error;
+
+#pid  logs/nginx.pid
+
+events {
+    use epoll;
+    worker_connections 50000;
+}
+
+http {
+   include         mime.types;
+   default_type    application/octet-stream;
+   log_format   main  '$remote_addr [$time_local] "$request"'
+                      '$status $bytes_event "$http_referer"'
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+   
+   access_log  logs/access.log  main buffer=32k;
+}
+
+2.3.1调试进程和定位问题的配置项
+1）是否以守护进程方式运行Nginx
+语法： daemon on|off;
+默认： daemon on；
+守护进程是在后台运行的进程。它脱离终端是为了避免进程执行过程中的信息在任何终端上显示，这样一来，进程就不会被任何终端所产生的信息打断。
+2）是否以master/worker方式工作
+语法：master_process on|off
+默认： master_process on;
+如果master_process off就不会fork出worker子进程来处理请求，而是用master进程自身来处理请求的。
+3）error日志的设置
+语法： error_log /path/file level;
+默认： error_log logs/error/log error;
+error日志使定位Nginx问题的最佳工具，我们可以根据自己的需求来设置error日志的路径和级别。
+/path/file 的取值：
+            默认logs/error.log，
+            /dev/null 这样就不会输出任何日志
+            还可以使stderr 这样日志会输出到标准错误文件中。
+error日志的级别：debug、info、notices、warn、error、crit、alert、emerg，从左到右级别依次增大。
+4) 是否处理几个特殊的调试点
+语法：debug_points [stop|abort]
+debug会在调试点处stop，
+abort会在调试点处产生一个coredump文件
+5）仅对指定的客户端输出debug级别的日志
+语法：debug_connection[IP|CIDR]
+这个配置项实际上属于事件类配置，它必须放在events中才有效，例如：
+events {
+    debug_connection 10.224.66.14;
+    debug_connection 10.224.47.0/24;
+}
+6)限制coredump核心存储文件的大小
+语法：worker_rlimit_core size;
+7）指定coredump文件生成目录
+语法：working_directory path;
+worker进程的工作目录。这个配置的唯一用途就是设置coredump文件所在的目录，协助定位问题。因此，需确保worker进程有权限写入文件。
+2.3.2 正常运行的配置项
+1）定义环境变量
+语法：env VAR|VAR=VALUE
+这个配置可以让用户直接设置系统上的环境变量。env TESTPATH=/tmp/；
+2）嵌入其他配置文件
+语法：include/path/file;
+3) pid文件路径
+语法：pid path/file;
+默认：pid logs/nginx.pid;
+4)Nginx worker进程运行的用户及用户组
+语法：user username [groupname]
+默认：user noday noday
+注意用户名与组名相同
+5）指定Nginx worker进程可以打开的最大句柄描述符的个数
+语法：work_rlimit_nofile limit;
+6)限制每个用户发往Nginx的信号队列的大小。
+语法：worker_rlimit_sigpending limit;
+2.3.3优化性能的配置项
+1）Nginx worker进程的个数
+语法： worker_processes number;
+默认： worker_processes 1;
+2) 绑定worker进程到指定的CPU，避免多个worker抢占同一个CPU内核
+语法：worker_cpu_affinity cpumask [cpumask]
+例如：
+worker_processes 4
+worker_cpu_affinity 1000 0100 0010 0001
+3)SSL硬件加速
+语法：ssl_engine device
+Openssl 提供的命令查看SSL硬件加速设备：
+openssl engine -t
+4)系统条用gettimeofday的执行斌率
+语法：timer_resolution t
+5）Nginx 进程优先级设置
+语法：worker_priority nice
+默认：worker_priority 0
+2.3.4事件类配置项
+1）是否打开accept锁
+语法：accept_mutex [on|off]
+默认：accept_mutex on;
+实现所有worker进程处理的客户端请求数尽量接近。
+2）使用accept锁后真正建立链接之间的延迟时间
+语法：accept_mutex_delay Nms;
+默认：accept_mutex_dalay 500ms;
+3) lock文件的路径
+语法：lock_file path/file
+默认：lock_file logs/nginx.lock;
+4) 批量建立新链接
+语法： multi_accept [on|off]
+默认： multi_accept off
+5) 选择事件模型
+语法：use [kqueue|rtsig|epoll|/dev/poll|select|poll|eventport]
+默认：Nginx会自动使用最合适的事件模型。
+6）每个worker的最大的连接数
+语法： worker_connections number;
+
+静态web服务器
+2.4.1虚拟主机与请求的分发
+1）监听端口
+语法：listen address:port [default_server| [backlog=num|revbuf=size|sndbuf=size | accept_filter=filter|deferred|bind|inv6only=[on|off]|ssl] ]
+默认：listen 80；
+配置块： server
+listen 127.0.0.1：8000;
+listen 8000;
+listen *:8000;
+listen localhost:8000
+2）主机名称
+语法：server_name name [...];
+默认：server_name "";
+配置块： server
+server_name后可以跟多个主机名称，如:
+server_name www.testweb.com download.testweb.com;
+3)server_names_hash_bucket_size
+语法：server_names_hash_bucket_size size
+默认：server_names_hash_bucket_size 32|64|128;
+配置块：http、server、location
+4)server_names_hash_max_size
+语法：server_names_hash_max_size size
+默认：server_names_hash_max_size 512;
+配置块：http、server、location
+5)重定向主机名称的处理
+语法：server_names_in_redirect on|off;
+默认：server_names_in_redirect on;
+配置块：http、server、location
+该配置需要配合server_name使用。在on打开使，表示重定向请求时回使用server_name里配置的第一个主机名代替原先请求中的Host头部；而使用off关闭时，表示在重定向请求时，会使用请求本身的Host头部。
+6）location
+语法：location[=|~|~*|@]/urI/{...}
+配置块：server
+A = 表示把URI作为字符串，以便与参数中的uri做完全匹配。例如：
+location = / {
+     #只有当用户请求是/时，才会使用该location下的配置
+}
+
+B ~ 表示匹配URI时字母大小写敏感的
+C ~* 表示匹配URI时忽略字母大小写问题
+D ^~ 表示匹配URI时只需要其前半部分与URI参数匹配。例如：
+location ^~/images/{
+     #以/image/开始的请求都会匹配上
+}
+E @ 表示仅用于Nginx服务内部请求之间的重定向问题，带有@的location不直接处理用户的请求。
+F 当然，在uri参数中是可以用正则表达式的，例如：
+locatioin ~* \.(gif|jpg|jpeg)$ {
+     #匹配以gif、jpg、jpeg结尾的请求
+}
+G 如果相处里不匹配所有的请求时则。。。就用“/”这个location处理。例如：
+locatioin / {
+     # / 可以匹配所有的请求
+}
+
+2.4.2 文件路径的定义
+1）以root方式设置资源路径
+语法： root path；
+默认： root html；
+配置块： http、server、location、if
+例如：定义资源文件限对于HTTP请求的根目录：
+location /download {
+    root /opt/web/html/;
+}
+如果有个URI是/download/index/test.html.那么服务器将会返回/opt/web/html/download/index/test.html。
+2）alias 方式设置资源路径
+语法： alias path；
+配置块： location
+alias也是用来设置文件资源路径的，它与root的不同点主要在于如何解读紧跟location后面的uri参数,例如如果有个URI是/conf/nginx.conf,而用户实际想访问的文件在/usr/local/nginx/conf/nginx.conf.
+那么alias来设置的话，可以采用如下的方式：
+location /conf {
+      alias /usr/local/nginx/conf/;
+}
+如果用root设置，那么语句如下所示：
+location /conf {
+      root /usr/local/nginx/;
+}
+
+alias时，会把location后面的参数/conf这部分的字符丢弃，因此，alias映射为path/nginx.conf。 
+root时，不会把localtion后面的参数/conf这部分的字符丢弃，因此，映射为path/conf/nginx.conf。
+3）访问首页
+语法： index file ...；
+配置块： http server location
+例如 访问站点时的URI是/，用ngx_http_index_module模块提供的index配置实现。
+location / {
+    root path;
+    index /index.htmp  /html/index.php /index.php;
+}
+4)根据HTTP返回重定向页面
+语法： error_page code [code...][=|=answer-code]uri|@named_loactaion；
+配置块： http server location if
+对于某个请求返回错误码时，如果匹配上了error_page中设置的code则重新定向到新的URI
+中。例如：
+error_page 404 /404.htmp;
+error_page 404 = &fetch;
+可以通过=来更改饭或的错误码。例如：
+error_page 404 = 200 /empt.gif;
+error_page 404 = 403 /forbidden.gif;
+也可以不指定确切返回的错误码，而是由实际处理的真实结果来决定，这时，只要把=后面的错误码去掉即可，例如：
+error_page 404 = /empt.gif
+如果不想修改URI，只是想让这样的请求重定向到另一个location中进行处理，可以这样设置：
+location / {
+     error_page 404 @fallback;
+}
+location @fallback {
+    proxy_pass http://backend;
+}
+5）try_fiels
+语法： try_fiels path1 [path2] uri；
+配置块： server location
+顺序访问每一个path，如果可以有效的读取，就直接返回path对应的文件结束，否则继续向下访问。如果所有的path都找不到，就重定向到最后的参数uri。
+try_fiels /system/maintenance.html $uri $uri/index.html &other；
+location @other {
+     proxy_pass http://backend;
+}
+
+2.4.3 内存及磁盘资源的分配
+2.4.4 网络连接的设置
+2.4.5 MIME类型的设置
+
+2.4.6 对客户端请求的限制
+1）按HTTP方法名限制用户请求
+语法： limit_except method ...{...}
+配置块： location
+Nginx 通过limit_except后面指定的方法名来限制用户请求。方法名可取：
+GET、HEAD、POST、PUT、DELETE、MKCOL、COPY、MOVE、OPTIONS、PROPFIND、PROPPATCH、LOCK、UNLOCK或者PATCH。例如：
+limit_except GET {
+    allow 192.168.1.0/32;
+    deny all;
+}
+2) HTTP请求包体的最大值
+语法： client_max_body_size size；
+默认： client_max_body_size 1m;
+配置块： http server location
+3) 请求的限速
+语法： limit_rate speed；
+默认： limit_rate 0;
+配置块: http server location if
+此配置是对客户端请求限制每秒传输的字节数。0表示不限速。
+sever {
+   if ($slow) {
+        set $limit_rate 4k;
+   }
+}
+4) limit_rate_after
+语法： limit_rate_after time；
+默认： limit_rate_after 1m;
+配置块: http server location if
+此配置表示Nginix向客户端发送的响应长度超过limit_rate_after后才开始限速。
+
+2.4.7 文件操作的优化
+2.4.8 对客户端请求的特殊处理
+2.4.9 ngx_http_core_module模块提供的变量
+
+2.5用HTTP proxy module 配置一个反向代理服务器
+2.5.2 反向代理的基本配置
+1）proxy_pass
+语法： proxy_pass URL;
+配置块： location if
+此项配置将当前请求反向代理到URL参数指定的服务器上，URL是主机名、ip地址+端口，还可以是UNIX句柄。
+proxy_pass htpp://localhost:8000/uri/;
+proxy_pass http://unix:/path/to/backend.socket:/uri/;
+还可以使用upstream：
+upstream backend {
+  server backend1.example.com;
+  server backend2.example.com;
+  server backend3.example.com;
+}
+
+server {
+  location / {
+    proxy_pass https://192.168.0.1;
+    proxy_pass http://backend;
+   }
+} 
+
+2）proxy_method
+语法：proxy_method method;
+配置块：http、server、location
+此配置项表示转发时的协议方法名，例如设置为：
+proxy_method POST;
+
+3）proxy_hide_header
+语法： proxy_hide_header the_header;
+配置块： http server location
+使用proxy_hide_header可以任意指定HTTP头部那些字段不被转发。
+proxy_hide_header Cache-Conotrol;
+proxy_hide_header MicrosofOfficeWebServer;
+
+4）proxy_pass_header
+语法： proxy_pass_header the_header;
+配置块： http server location
+proxy_pass_header会将原来禁止转发的字段设为允许转发。
+proxy_pass_header X-Accel-Redirect;
+
+5）proxy_pass_request_body
+语法：proxy_pass_request_body on|off;
+默认：proxy_pass_request_body on；
+配置块： http server location
+
+6）proxy_pass_request_headers
+语法：proxy_pass_request_headers on|off;
+默认：proxy_pass_request_body on；
+配置块： http server location
+
+7）proxy_redirect
+语法：proxy_redirect [default|off|redirect replacement];
+默认：proxy_redirect default；
+配置块： http server location
+proxy_redirect可以重设HTTP头部的location或refersh字段。
+

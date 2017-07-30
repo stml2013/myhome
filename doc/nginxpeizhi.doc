@@ -1,0 +1,52 @@
+nginx 安装目录是/home/wyp/桌面/testkNx/nginx
+./configure --prefix=/home/wyp/桌面/testkNx/nginx \
+--with-cc-opt=-finstrument-functions \
+--with-http_ssl_module \
+--with-pcre=/home/wyp/下载/pcre-8.33 \
+--with-zlib=/home/wyp/下载/zlib-1.2.8 \
+--with-openssl=/home/wyp/下载/openssl-0.9.8o \
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_5_myfilter \
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_2_myconfig
+
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_1_hello \
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_2_myconfig \
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_4_subrequest
+
+
+sudo /home/wyp/桌面/testkNx/nginx/sbin/nginx -s stop
+启动
+确保系统的 80 端口没被其他程序占用，运行/usr/local/nginx/nginx 命令来启动 Nginx，
+netstat -ano|grep 80
+如果查不到结果后执行，有结果则忽略此步骤（ubuntu下必须用sudo启动，不然只能在前台运行）
+
+sudo /usr/local/nginx/nginx
+sudo /usr/local/nginx/nginx -V查看nginx安装了那些模块
+sudo /usr/local/nginx/nginx -v查看nginx的版本号
+
+./configure --add-module=/home/wyp/桌面/nginx/nginx-1.0.15/mytest
+nginx 安装目录是/home/wyp/桌面/testNx/nginx
+./configure --prefix=/home/wyp/桌面/testNx/nginx \
+--with-http_ssl_module \
+--with-pcre=/home/wyp/下载/pcre-8.33 \
+--with-zlib=/home/wyp/下载/zlib-1.2.8 \
+--with-openssl=/home/wyp/下载/openssl-0.9.8o \
+--add-module=/home/wyp/桌面/testNx/nginx-1.0.15/my_hello_module \
+--add-module=/home/wyp/桌面/testNx/nginx-1.0.15/mytest2
+\
+--add-module=/home/wyp/桌面/testNx/nginx-1.0.15/mytest2
+
+./configure --prefix=/home/wyp/桌面/testNx/nginx \
+--add-module=/home/wyp/桌面/testNx/nginx-1.0.15/mytest2
+
+sudo /home/wyp/桌面/testkNx/nginx/sbin/nginx -s stop
+
+ location /hello {
+            test_hello ;
+        }
+
+./configure  \
+--with-http_ssl_module \
+--with-pcre=/home/wyp/下载/pcre-8.33 \
+--with-zlib=/home/wyp/下载/zlib-1.2.8 \
+--with-openssl=/home/wyp/下载/openssl-0.9.8o \
+--add-module=/home/wyp/桌面/testkNx/nginx-1.0.15/module_5_myfilter

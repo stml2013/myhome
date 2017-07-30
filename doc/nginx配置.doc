@@ -1,0 +1,11 @@
+./configure --with-http_ssl_module \
+--with-pcre=/home/wyp/下载/pcre-8.33 \
+--with-zlib=/home/wyp/下载/zlib-1.2.8 \
+--with-openssl=/home/wyp/下载/openssl-0.9.8o
+
+启动
+确保系统的 80 端口没被其他程序占用，运行/usr/local/nginx/nginx 命令来启动 Nginx，
+netstat -ano|grep 80
+如果查不到结果后执行，有结果则忽略此步骤（ubuntu下必须用sudo启动，不然只能在前台运行）
+
+sudo /usr/local/nginx/nginx
