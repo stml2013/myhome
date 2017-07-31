@@ -12,10 +12,10 @@
 
 
 typedef struct {
-    int     signo;
-    char   *signame;
-    char   *name;
-    void  (*handler)(int signo);
+    int     signo;//信号值
+    char   *signame;//信号名称
+    char   *name;//
+    void  (*handler)(int signo);//处理信号
 } ngx_signal_t;
 
 
@@ -29,12 +29,12 @@ int              ngx_argc;
 char           **ngx_argv;
 char           **ngx_os_argv;
 
-ngx_int_t        ngx_process_slot;
+ngx_int_t        ngx_process_slot;//当前进程在ngx_processes数组中的下标
 ngx_socket_t     ngx_channel;
-ngx_int_t        ngx_last_process;
+ngx_int_t        ngx_last_process;//ngx_processes数组中有意义的ngx_process_t元素中最大的下标
 ngx_process_t    ngx_processes[NGX_MAX_PROCESSES];
 
-
+/*信号集的结构体*/
 ngx_signal_t  signals[] = {
     { ngx_signal_value(NGX_RECONFIGURE_SIGNAL),
       "SIG" ngx_value(NGX_RECONFIGURE_SIGNAL),
@@ -81,7 +81,7 @@ ngx_signal_t  signals[] = {
     { 0, NULL, "", NULL }
 };
 
-
+/*核心函数*/
 ngx_pid_t
 ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     char *name, ngx_int_t respawn)
@@ -112,7 +112,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     if (respawn != NGX_PROCESS_DETACHED) {
 
         /* Solaris 9 still has no AF_LOCAL */
-
+		//条用socketpair创建父子进程间通信的套接字
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, ngx_processes[s].channel) == -1)
         {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -124,7 +124,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
                        "channel %d:%d",
                        ngx_processes[s].channel[0],
                        ngx_processes[s].channel[1]);
-
+		//把channel[0]设置为非阻塞的，ngx_nonblocking在ngx_socket.c中
         if (ngx_nonblocking(ngx_processes[s].channel[0]) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           ngx_nonblocking_n " failed while spawning \"%s\"",
@@ -132,7 +132,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		//把channel[1]设置为非阻塞的
         if (ngx_nonblocking(ngx_processes[s].channel[1]) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           ngx_nonblocking_n " failed while spawning \"%s\"",
@@ -140,7 +140,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+        /*根据iocl的第三个参数指向一个0值或非0值分别清除或设置针对本套接口的信号驱动异步I/O标志，它决定是否收取针对本套接口的异步I/O信号（SIGIO）。本请求和O_ASYNC文件状态标志等效，而该标志可以通过fcntl的F_SETFL命令清除或设置。ioctl相见：http://blog.csdn.net/zuokong/article/details/7764979*/
         on = 1;
         if (ioctl(ngx_processes[s].channel[0], FIOASYNC, &on) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
@@ -148,14 +148,16 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		//设置将接受SIGIO或SIGURG信号的进程id
+		//(这里设置将要接受异步i/o信号的进程id)
+		//这里ngx_pid是master进程的id，初始化在nginx.c中调用ngx_daemon函数初始化的
         if (fcntl(ngx_processes[s].channel[0], F_SETOWN, ngx_pid) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(F_SETOWN) failed while spawning \"%s\"", name);
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		//进程执行了exec后，关闭socket(channel[0])
         if (fcntl(ngx_processes[s].channel[0], F_SETFD, FD_CLOEXEC) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(FD_CLOEXEC) failed while spawning \"%s\"",
@@ -163,7 +165,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		//进程执行了exec后，关闭socket(channel[1])
         if (fcntl(ngx_processes[s].channel[1], F_SETFD, FD_CLOEXEC) == -1) {
             ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                           "fcntl(FD_CLOEXEC) failed while spawning \"%s\"",
@@ -171,14 +173,14 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
             ngx_close_channel(ngx_processes[s].channel, cycle->log);
             return NGX_INVALID_PID;
         }
-
+		//用于监听可读事件的socket，用1通道
         ngx_channel = ngx_processes[s].channel[1];
 
     } else {
         ngx_processes[s].channel[0] = -1;
         ngx_processes[s].channel[1] = -1;
     }
-
+	//设置当前子进程的进程表索引值 
     ngx_process_slot = s;
 
 
@@ -192,9 +194,9 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
         ngx_close_channel(ngx_processes[s].channel, cycle->log);
         return NGX_INVALID_PID;
 
-    case 0:
+    case 0://设置子进程id
         ngx_pid = ngx_getpid();
-        proc(cycle, data);
+        proc(cycle, data);//子进程处理函数
         break;
 
     default:
@@ -278,7 +280,7 @@ ngx_execute_proc(ngx_cycle_t *cycle, void *data)
     exit(1);
 }
 
-
+//注册信号和信号处理函数
 ngx_int_t
 ngx_init_signals(ngx_log_t *log)
 {
@@ -287,8 +289,10 @@ ngx_init_signals(ngx_log_t *log)
 
     for (sig = signals; sig->signo != 0; sig++) {
         ngx_memzero(&sa, sizeof(struct sigaction));
-        sa.sa_handler = sig->handler;
-        sigemptyset(&sa.sa_mask);
+        sa.sa_handler = sig->handler;//处理信号的函数
+        sigemptyset(&sa.sa_mask);//清空该信号集
+		//函数说明 sigaction()会依参数signum指定的信号编号来设置该信号的处理函数。
+        //参数signum可以指定SIGKILL和SIGSTOP以外的所有信号。
         if (sigaction(sig->signo, &sa, NULL) == -1) {
             ngx_log_error(NGX_LOG_EMERG, log, ngx_errno,
                           "sigaction(%s) failed", sig->signame);
@@ -299,7 +303,7 @@ ngx_init_signals(ngx_log_t *log)
     return NGX_OK;
 }
 
-
+/*根据信号调用相应的信号处理函数，这个函数感觉就是设置一些标记和输出一些字符串*/
 void
 ngx_signal_handler(int signo)
 {
@@ -317,7 +321,7 @@ ngx_signal_handler(int signo)
             break;
         }
     }
-
+	//
     ngx_time_sigsafe_update();
 
     action = "";
@@ -456,7 +460,7 @@ ngx_process_get_status(void)
     one = 0;
 
     for ( ;; ) {
-        pid = waitpid(-1, &status, WNOHANG);
+        pid = waitpid(-1, &status, WNOHANG);//？？？？？？
 
         if (pid == 0) {
             return;
@@ -574,10 +578,10 @@ ngx_int_t
 ngx_os_signal_process(ngx_cycle_t *cycle, char *name, ngx_int_t pid)
 {
     ngx_signal_t  *sig;
-
+	//根据name查找信号编码，然后向进程发送信号
     for (sig = signals; sig->signo != 0; sig++) {
         if (ngx_strcmp(name, sig->name) == 0) {
-            if (kill(pid, sig->signo) != -1) {
+            if (kill(pid, sig->signo) != -1) {//向进程pid法送信号
                 return 0;
             }
 

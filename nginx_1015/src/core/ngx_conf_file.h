@@ -76,19 +76,19 @@
 
 
 struct ngx_command_s {
-    ngx_str_t             name;
-    ngx_uint_t            type;
-    char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-    ngx_uint_t            conf;
-    ngx_uint_t            offset;
-    void                 *post;
+    ngx_str_t             name;//配置指令名
+    ngx_uint_t            type;//配置指令类新
+    char               *(*set)(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);//解析配置指令的set函数
+    ngx_uint_t            conf;//配置模块的偏移
+    ngx_uint_t            offset;//配置结构体的成员在配置结构体中的偏移
+    void                 *post;//这个post有很多用法
 };
 
 #define ngx_null_command  { ngx_null_string, 0, NULL, 0, 0, NULL }
 
 
 struct ngx_open_file_s {
-    ngx_fd_t              fd;
+    ngx_fd_t              fd;//文件句柄
     ngx_str_t             name;
 
     u_char               *buffer;
@@ -109,8 +109,8 @@ struct ngx_open_file_s {
 #define NGX_MODULE_V1_PADDING  0, 0, 0, 0, 0, 0, 0, 0
 
 struct ngx_module_s {
-    ngx_uint_t            ctx_index;
-    ngx_uint_t            index;
+    ngx_uint_t            ctx_index;//在相同类型里面的index
+    ngx_uint_t            index;//在整个模块中的index
 
     ngx_uint_t            spare0;
     ngx_uint_t            spare1;
@@ -119,9 +119,9 @@ struct ngx_module_s {
 
     ngx_uint_t            version;
 
-    void                 *ctx;
-    ngx_command_t        *commands;
-    ngx_uint_t            type;
+    void                 *ctx;//配置指令的上下文
+    ngx_command_t        *commands;//配置指令
+    ngx_uint_t            type;//配置模块类型
 
     ngx_int_t           (*init_master)(ngx_log_t *log);
 
@@ -146,16 +146,16 @@ struct ngx_module_s {
 
 
 typedef struct {
-    ngx_str_t             name;
-    void               *(*create_conf)(ngx_cycle_t *cycle);
-    char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);
+    ngx_str_t             name;//模块名
+    void               *(*create_conf)(ngx_cycle_t *cycle);//创建配置结构体
+    char               *(*init_conf)(ngx_cycle_t *cycle, void *conf);//初始化配置结构体
 } ngx_core_module_t;
 
 
 typedef struct {
-    ngx_file_t            file;
-    ngx_buf_t            *buffer;
-    ngx_uint_t            line;
+    ngx_file_t            file;//里面存有文件的信息 
+    ngx_buf_t            *buffer;//每次次读取的内容放到buffer里面
+    ngx_uint_t            line;//记录配置文件的行数
 } ngx_conf_file_t;
 
 
@@ -164,21 +164,21 @@ typedef char *(*ngx_conf_handler_pt)(ngx_conf_t *cf,
 
 
 struct ngx_conf_s {
-    char                 *name;
-    ngx_array_t          *args;
+    char                 *name;//存放当前解析到的指令
+    ngx_array_t          *args;//存放包含该指令的所有参数
 
-    ngx_cycle_t          *cycle;
-    ngx_pool_t           *pool;
-    ngx_pool_t           *temp_pool;
-    ngx_conf_file_t      *conf_file;
-    ngx_log_t            *log;
+    ngx_cycle_t          *cycle;//这个是核心的结构体，参看ngx_cycle.h文件
+    ngx_pool_t           *pool;//内存池
+    ngx_pool_t           *temp_pool;//用于存放解析配置文件的临时内存池，解析后会释放
+    ngx_conf_file_t      *conf_file;//ngx_conf_file_t结构体的指针
+    ngx_log_t            *log;//
 
-    void                 *ctx;
-    ngx_uint_t            module_type;
-    ngx_uint_t            cmd_type;
+    void                 *ctx;//描述指令的上下文
+    ngx_uint_t            module_type;//支持指令的模块类型
+    ngx_uint_t            cmd_type;//指令的类型
 
-    ngx_conf_handler_pt   handler;
-    char                 *handler_conf;
+    ngx_conf_handler_pt   handler;//指令自定义的处理函数
+    char                 *handler_conf;//自定义处理函数需要的相关配置
 };
 
 

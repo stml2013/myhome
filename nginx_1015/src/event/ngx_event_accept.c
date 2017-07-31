@@ -57,7 +57,7 @@ ngx_event_accept(ngx_event_t *ev)
         } else {
             s = accept(lc->fd, (struct sockaddr *) sa, &socklen);
         }
-#else
+#else   //建立tcp连接
         s = accept(lc->fd, (struct sockaddr *) sa, &socklen);
 #endif
 
@@ -103,10 +103,10 @@ ngx_event_accept(ngx_event_t *ev)
 #if (NGX_STAT_STUB)
         (void) ngx_atomic_fetch_add(ngx_stat_accepted, 1);
 #endif
-
+		//设置负载均衡阀值
         ngx_accept_disabled = ngx_cycle->connection_n / 8
                               - ngx_cycle->free_connection_n;
-
+		//从连接池中获得一个连接ngx_connection_t
         c = ngx_get_connection(s, ev->log);
 
         if (c == NULL) {
@@ -121,19 +121,19 @@ ngx_event_accept(ngx_event_t *ev)
 #if (NGX_STAT_STUB)
         (void) ngx_atomic_fetch_add(ngx_stat_active, 1);
 #endif
-
+		//为这个连接建立内存池
         c->pool = ngx_create_pool(ls->pool_size, ev->log);
         if (c->pool == NULL) {
             ngx_close_accepted_connection(c);
             return;
         }
-
+		//sockaddr申请内存
         c->sockaddr = ngx_palloc(c->pool, socklen);
         if (c->sockaddr == NULL) {
             ngx_close_accepted_connection(c);
             return;
         }
-
+		//初始化sockaddr
         ngx_memcpy(c->sockaddr, sa, socklen);
 
         log = ngx_palloc(c->pool, sizeof(ngx_log_t));
@@ -272,7 +272,7 @@ ngx_event_accept(ngx_event_t *ev)
                        "*%d accept: %V fd:%d", c->number, &c->addr_text, s);
 
         if (ngx_add_conn && (ngx_event_flags & NGX_USE_EPOLL_EVENT) == 0) {
-            if (ngx_add_conn(c) == NGX_ERROR) {
+            if (ngx_add_conn(c) == NGX_ERROR) {//将这个新连接添加到epoll中监控
                 ngx_close_accepted_connection(c);
                 return;
             }
@@ -281,7 +281,7 @@ ngx_event_accept(ngx_event_t *ev)
         log->data = NULL;
         log->handler = NULL;
 
-        ls->handler(c);
+        ls->handler(c);//调用ngx_listening的ngx_connection_handler_pt处理这个连接
 
         if (ngx_event_flags & NGX_USE_KQUEUE_EVENT) {
             ev->available--;

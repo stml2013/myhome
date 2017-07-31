@@ -85,7 +85,9 @@ ngx_create_listening(ngx_conf_t *cf, void *sockaddr, socklen_t socklen)
     return ls;
 }
 
-
+/*
+初始化cycle成员中listening数组中的每一个有效的套接字
+*/
 ngx_int_t
 ngx_set_inherited_sockets(ngx_cycle_t *cycle)
 {
@@ -100,7 +102,7 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
 #if (NGX_HAVE_DEFERRED_ACCEPT && defined TCP_DEFER_ACCEPT)
     int                        timeout;
 #endif
-
+	//遍历数组，判断有效socket句柄，并初始化相关的设置，比如标识位
     ls = cycle->listening.elts;
     for (i = 0; i < cycle->listening.nelts; i++) {
 
@@ -110,16 +112,18 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
         }
 
         ls[i].socklen = NGX_SOCKADDRLEN;
-        if (getsockname(ls[i].fd, ls[i].sockaddr, &ls[i].socklen) == -1) {
+		//返回fd句柄的绑定的地址，socklen指定sockaddr的原始长度，
+		//函数返回后，socklen返回实际地址的长度，函数调用成功返回0，失败返回-1
+        if (getsockname(ls[i].fd, ls[i].sockaddr, &ls[i].socklen) == -1) {//无效套接字句柄
             ngx_log_error(NGX_LOG_CRIT, cycle->log, ngx_socket_errno,
                           "getsockname() of the inherited "
                           "socket #%d failed", ls[i].fd);
-            ls[i].ignore = 1;
+            ls[i].ignore = 1;//为1表示跳过设置当前ngx_listening_t结构体中的套接字，为0时正常初始化套接字
             continue;
         }
 
-        switch (ls[i].sockaddr->sa_family) {
-
+        switch (ls[i].sockaddr->sa_family) {//查看sockaddr 地址族类型
+		//初始化存储ip地址字符串tex_data的最大长度
 #if (NGX_HAVE_INET6)
         case AF_INET6:
              ls[i].addr_text_max_len = NGX_INET6_ADDRSTRLEN;
@@ -143,7 +147,7 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
             ngx_log_error(NGX_LOG_CRIT, cycle->log, ngx_socket_errno,
                           "the inherited socket #%d has "
                           "an unsupported protocol family", ls[i].fd);
-            ls[i].ignore = 1;
+            ls[i].ignore = 1;//无效地址，跳过此listening的套接字的初始化，为0表示正常初始化其套接字
             continue;
         }
 
@@ -151,18 +155,18 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
         if (ls[i].addr_text.data == NULL) {
             return NGX_ERROR;
         }
-
+		//将socket绑定的地址转换为字符串格式(ipv4和ipv6的不相同) 
         len = ngx_sock_ntop(ls[i].sockaddr, ls[i].addr_text.data, len, 1);
         if (len == 0) {
             return NGX_ERROR;
         }
 
-        ls[i].addr_text.len = len;
+        ls[i].addr_text.len = len;//字符串长度
 
-        ls[i].backlog = NGX_LISTEN_BACKLOG;
+        ls[i].backlog = NGX_LISTEN_BACKLOG;//监听队列长度
 
         olen = sizeof(int);
-
+		//获取文件描述符的接受缓冲区大小，并用rcvbuf保存，并且返回实际rcvbuf大小olen(值被改变)
         if (getsockopt(ls[i].fd, SOL_SOCKET, SO_RCVBUF, (void *) &ls[i].rcvbuf,
                        &olen)
             == -1)
@@ -175,7 +179,7 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
         }
 
         olen = sizeof(int);
-
+		//获取文件描述符的发送缓冲区大小，并用snbuf保存，并且返回实际sndbuf大小olen
         if (getsockopt(ls[i].fd, SOL_SOCKET, SO_SNDBUF, (void *) &ls[i].sndbuf,
                        &olen)
             == -1)
@@ -207,7 +211,14 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
 #endif
 
 #if (NGX_HAVE_DEFERRED_ACCEPT && defined SO_ACCEPTFILTER)
-
+/* 
+当支持accept filter时，通过SO_ACCEPTFILTER选项取得socket的accept_filter表 
+保存在对应项的accept_filter中； 
+下面是SO_ACCEPTFILTER的解释：
+SO_ACCEPTFILTER 是socket上的输入过滤，他在接手前 
+将过滤掉传入流套接字的链接，功能是服务器不等待 
+最后的ACK包而仅仅等待携带数据负载的包。
+*/  
         ngx_memzero(&af, sizeof(struct accept_filter_arg));
         olen = sizeof(struct accept_filter_arg);
 
@@ -240,7 +251,11 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
 #endif
 
 #if (NGX_HAVE_DEFERRED_ACCEPT && defined TCP_DEFER_ACCEPT)
-
+/* http://blog.csdn.net/lengzijian/article/details/7593861
+如果当前操作系统TCP层支持TCP_DEFER_ACCEPT， 
+则试图获取TCP_DEFER_ACCEPT的timeout值。Timeout大于0时， 
+则将socket对应deferred_accept标志设为1 
+*/
         timeout = 0;
         olen = sizeof(int);
 
@@ -264,7 +279,8 @@ ngx_set_inherited_sockets(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
-
+/*打开ngx_cycle_t的lisenting数组中所有的监听端口：对每一个都调用socket,bind,listen。
+这个函数会在ngx_init_cycle中调用，用来打开所有的监听端口*/
 ngx_int_t
 ngx_open_listening_sockets(ngx_cycle_t *cycle)
 {
@@ -292,7 +308,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
         ls = cycle->listening.elts;
         for (i = 0; i < cycle->listening.nelts; i++) {
 
-            if (ls[i].ignore) {
+            if (ls[i].ignore) {//跳过初始化当前ls[i]中的套接字，这个套接字已经打开
                 continue;
             }
 
@@ -300,7 +316,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
                 continue;
             }
 
-            if (ls[i].inherited) {
+            if (ls[i].inherited) {//这个监听是来自前一个进程的
 
                 /* TODO: close on exit */
                 /* TODO: nonblocking */
@@ -308,7 +324,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
                 continue;
             }
-
+			//0实际调用socket打开一个套接字，返回套接字句柄
             s = ngx_socket(ls[i].sockaddr->sa_family, ls[i].type, 0);
 
             if (s == -1) {
@@ -371,7 +387,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
             ngx_log_debug2(NGX_LOG_DEBUG_CORE, log, 0,
                            "bind() %V #%d ", &ls[i].addr_text, s);
-
+			//1调用bind绑定套接字
             if (bind(s, ls[i].sockaddr, ls[i].socklen) == -1) {
                 err = ngx_socket_errno;
 
@@ -419,7 +435,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
                 }
             }
 #endif
-
+			//2调用listen监听套接字
             if (listen(s, ls[i].backlog) == -1) {
                 ngx_log_error(NGX_LOG_EMERG, log, ngx_socket_errno,
                               "listen() to %V, backlog %d failed",

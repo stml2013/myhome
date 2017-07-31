@@ -97,7 +97,18 @@ typedef intptr_t        ngx_flag_t;
 #define ngx_align(d, a)     (((d) + (a - 1)) & ~(a - 1))
 #define ngx_align_ptr(p, a)                                                   \
     (u_char *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+/*
+#define ngx_align(d, a)     (((d) + (a - 1)) & ~(a - 1))
+内存对齐，本质就是如果项申请大小为d的内存，按照a(a是2的幂)来对齐，那么实际应该申请多少内存，
+比如说我想申请内存大小为15，按照8来对齐，那么实际申请的内存应该是16，如果按16来对齐实际申请的内存也是16
+ngx_align(31,16)=32
+ngx_align(65,16)=80
+ngx_align(127,16)=128
+有规律了吧，就是返回大于等于d并且是a的整数倍的最小值
 
+#define ngx_align_ptr(p, a) (u_char *) (((uintptr_t) (p) + ((uintptr_t) a - 1)) & ~((uintptr_t) a - 1))
+这个宏定义和ngx_align几乎一样，只不过返回的一个指针。这样可以快速定位。
+*/
 
 #define ngx_abort       abort
 

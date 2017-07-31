@@ -36,10 +36,12 @@ typedef struct {
 
 
 struct ngx_event_s {
+    //事件相关的对象。通常data都是指向ngx_connection_t连接对象。开启文件异步I/O时，它可能指向ngx_event_aio_t结构体
     void            *data;
-
+	//为1时表示事件是可写的。通常，表示对应的tcp链接目前状态是可写的，也就是连接处于可以发送网络包的状态
     unsigned         write:1;
-
+    //为1时表示此事件可以建立新的连接。通常，在ngx_cycle_t中的listening动态数组中，每一个监听对象ngx_listening_t对应的读时间中
+    //的accept标志位才会是1
     unsigned         accept:1;
 
     /* used to detect the stale events in kqueue, rtsig, and epoll */
@@ -246,7 +248,7 @@ typedef struct {
 } ngx_event_actions_t;
 
 
-extern ngx_event_actions_t   ngx_event_actions;
+extern ngx_event_actions_t   ngx_event_actions;//可以被外部使用的全局变量
 
 
 /*
@@ -444,11 +446,11 @@ extern ngx_event_actions_t   ngx_event_actions;
 #define NGX_CLEAR_EVENT    0    /* dummy declaration */
 #endif
 
-
+/*这几个宏定义可以看ngx_epoll_module的实现的ngx_event_actions*/
 #define ngx_process_changes  ngx_event_actions.process_changes
 #define ngx_process_events   ngx_event_actions.process_events
 #define ngx_done_events      ngx_event_actions.done
-
+//对于epoll模块，ngx_add_event 就是 ngx_epoll_add_event
 #define ngx_add_event        ngx_event_actions.add
 #define ngx_del_event        ngx_event_actions.del
 #define ngx_add_conn         ngx_event_actions.add_conn
@@ -458,7 +460,7 @@ extern ngx_event_actions_t   ngx_event_actions;
 #define ngx_del_timer        ngx_event_del_timer
 
 
-extern ngx_os_io_t  ngx_io;
+extern ngx_os_io_t  ngx_io;//外部使用的全局变量
 
 #define ngx_recv             ngx_io.recv
 #define ngx_recv_chain       ngx_io.recv_chain
@@ -472,18 +474,18 @@ extern ngx_os_io_t  ngx_io;
 
 
 typedef struct {
-    ngx_uint_t    connections;
-    ngx_uint_t    use;
+    ngx_uint_t    connections;//连接池的大小
+    ngx_uint_t    use;//选用的时间模块在所有事件模块中的序号
 
-    ngx_flag_t    multi_accept;
-    ngx_flag_t    accept_mutex;
+    ngx_flag_t    multi_accept;//标识位为1表示建立尽可能多的连接
+    ngx_flag_t    accept_mutex;//是否开启负载均衡锁
 
-    ngx_msec_t    accept_mutex_delay;
+    ngx_msec_t    accept_mutex_delay;//延迟建立连接的时间
 
-    u_char       *name;
+    u_char       *name;//所选模块名
 
 #if (NGX_DEBUG)
-    ngx_array_t   debug_connection;
+    ngx_array_t   debug_connection;//--with-debug下，针对客户端连接调试级别的日志
 #endif
 } ngx_event_conf_t;
 

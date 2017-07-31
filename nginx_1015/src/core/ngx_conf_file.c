@@ -70,7 +70,7 @@ ngx_conf_param(ngx_conf_t *cf)
 
     param = &cf->cycle->conf_param;
 
-    if (param->len == 0) {
+    if (param->len == 0) {//没有参数可解析，直接返回
         return NGX_CONF_OK;
     }
 
@@ -84,7 +84,7 @@ ngx_conf_param(ngx_conf_t *cf)
     b.end = b.last;
     b.temporary = 1;
 
-    conf_file.file.fd = NGX_INVALID_FILE;
+    conf_file.file.fd = NGX_INVALID_FILE;//
     conf_file.file.name.data = NULL;
     conf_file.line = 0;
 
@@ -98,7 +98,7 @@ ngx_conf_param(ngx_conf_t *cf)
     return rv;
 }
 
-
+/*如果filename为空，解析的是什么？？？？*/
 char *
 ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
 {
@@ -165,7 +165,7 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
         type = parse_block;
 
     } else {
-        type = parse_param;
+        type = parse_param;//parse_param
     }
 
 
@@ -452,20 +452,44 @@ ngx_conf_read_token(ngx_conf_t *cf)
     s_quoted = 0;
     d_quoted = 0;
 
-    cf->args->nelts = 0;
-    b = cf->conf_file->buffer;
-    start = b->pos;
-    start_line = cf->conf_file->line;
+	/*
+	args是个数组，这个数组用来存取读取的配置内容，格式如下所示：
+	格式1：
+	user  nobody;
+    http {
+    include  conf/mime.types;
+    #gzip  on;
+    server {
+            listen  80;
+            location / {root   html; }
+           }
+    }
+	user nobody              cf->args 数组长度2
+    http                     cf->args 数组长度1
+    include  conf/mime.types cf->args 数组长度2
 
-    file_size = ngx_file_size(&cf->conf_file->file.info);
+    还可以读取以下格式 可以用双(单)引号包括 可以多个相连
+    格式2：
+    'error_log'  "logs/error.log";                                  cf->args数组长度2
+    "error_log"  "logs/err
+     or.log";                              用引号包括可以有换行               数组长度2
+     error_log  "l\"ogs/error.log";        中间有双引号要用\转义              数组长度2
+     error_log  "logs/error.log" "dfadsfa";相邻的双引号中间要有\r\n\t或空格   数组长度3
+	*/
+    cf->args->nelts = 0;//数组，保存所有分析的配置项的值
+    b = cf->conf_file->buffer;
+    start = b->pos;//每次在buffer中读取字符的第一个开始位置，也是上一次读取的开始位置
+    start_line = cf->conf_file->line;//读到配置文件的第几行
+
+    file_size = ngx_file_size(&cf->conf_file->file.info);//文件的大小
 
     for ( ;; ) {
+		//每次读取1024字节的内容
+        if (b->pos >= b->last) {//内容读取完了，重新读取内容，准确的说应该是内存使用完了
 
-        if (b->pos >= b->last) {
+            if (cf->conf_file->file.offset >= file_size) {//读到文件结束位置，就结束了
 
-            if (cf->conf_file->file.offset >= file_size) {
-
-                if (cf->args->nelts > 0) {
+                if (cf->args->nelts > 0) {//？
 
                     if (cf->conf_file->file.fd == NGX_INVALID_FILE) {
                         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
@@ -480,13 +504,15 @@ ngx_conf_read_token(ngx_conf_t *cf)
                     return NGX_ERROR;
                 }
 
-                return NGX_CONF_FILE_DONE;
+                return NGX_CONF_FILE_DONE;//
             }
 
-            len = b->pos - start;
+			//start cf->args数组里面的每个元素的开始指针
+			//b->pos 每向后分析一个字符加一 但前位置
+            len = b->pos - start;//本次分析字符的长度
 
-            if (len == NGX_CONF_BUFFER) {
-                cf->conf_file->line = start_line;
+            if (len == NGX_CONF_BUFFER) {//假如长度已经达到NGX_CONF_BUFFER的长度
+                cf->conf_file->line = start_line;//文件的行数
 
                 if (d_quoted) {
                     ch = '"';
@@ -539,7 +565,7 @@ ngx_conf_read_token(ngx_conf_t *cf)
 
         ch = *b->pos++;
 
-        if (ch == LF) {
+        if (ch == LF) {//碰到\n
             cf->conf_file->line++;
 
             if (sharp_comment) {
@@ -679,12 +705,12 @@ ngx_conf_read_token(ngx_conf_t *cf)
             }
 
             if (found) {
-                word = ngx_array_push(cf->args);
+                word = ngx_array_push(cf->args);/////////////////////////
                 if (word == NULL) {
                     return NGX_ERROR;
                 }
 
-                word->data = ngx_pnalloc(cf->pool, b->pos - start + 1);
+                word->data = ngx_pnalloc(cf->pool, b->pos - start + 1);//保存
                 if (word->data == NULL) {
                     return NGX_ERROR;
                 }

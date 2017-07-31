@@ -28,7 +28,7 @@
 static ngx_str_t  *ngx_sys_errlist;
 static ngx_str_t   ngx_unknown_error = ngx_string("Unknown error");
 
-
+/*根据err错误码，返回错误信息，错误信息存储在errstr中，errstr必须由调用这申请内存*/
 u_char *
 ngx_strerror(ngx_err_t err, u_char *errstr, size_t size)
 {
@@ -41,7 +41,7 @@ ngx_strerror(ngx_err_t err, u_char *errstr, size_t size)
     return ngx_cpymem(errstr, msg->data, size);
 }
 
-
+/*初始化系统错误编码，并将其对应的描述信息存放在ngx_sys_errlist中*/
 ngx_uint_t
 ngx_strerror_init(void)
 {
@@ -55,14 +55,16 @@ ngx_strerror_init(void)
      * malloc() is used and possible errors are logged using strerror().
      */
 
-    len = NGX_SYS_NERR * sizeof(ngx_str_t);
+    len = NGX_SYS_NERR * sizeof(ngx_str_t);//
 
-    ngx_sys_errlist = malloc(len);
+    ngx_sys_errlist = malloc(len);//申请存储错误的数组
     if (ngx_sys_errlist == NULL) {
         goto failed;
     }
-
+    //编码范围是0-131,总共132个编码错误
     for (err = 0; err < NGX_SYS_NERR; err++) {
+        //strerror通过标准错误的标号，获得错误的描述字符串 ，
+        //将单纯的错误标号转为字符串描述，方便用户查找错误
         msg = strerror(err);
         len = ngx_strlen(msg);
 
@@ -71,9 +73,9 @@ ngx_strerror_init(void)
             goto failed;
         }
 
-        ngx_memcpy(p, msg, len);
+        ngx_memcpy(p, msg, len);//拷贝字符串
         ngx_sys_errlist[err].len = len;
-        ngx_sys_errlist[err].data = p;
+        ngx_sys_errlist[err].data = p;//放入数组
     }
 
     return NGX_OK;

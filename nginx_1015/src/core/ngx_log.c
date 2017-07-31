@@ -281,7 +281,7 @@ ngx_log_init(u_char *prefix)
     nlen = ngx_strlen(name);
 
     if (nlen == 0) {
-        ngx_log_file.fd = ngx_stderr;
+        ngx_log_file.fd = ngx_stderr;//标准错误输出，输出到终端
         return &ngx_log;
     }
 
@@ -298,7 +298,7 @@ ngx_log_init(u_char *prefix)
 
         } else {
 #ifdef NGX_PREFIX
-            prefix = (u_char *) NGX_PREFIX;
+            prefix = (u_char *) NGX_PREFIX;//在这里初始化prefix
             plen = ngx_strlen(prefix);
 #else
             plen = 0;

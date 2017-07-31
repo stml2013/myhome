@@ -20,12 +20,12 @@ typedef ngx_int_t   ngx_rbtree_key_int_t;
 typedef struct ngx_rbtree_node_s  ngx_rbtree_node_t;
 
 struct ngx_rbtree_node_s {
-    ngx_rbtree_key_t       key;
-    ngx_rbtree_node_t     *left;
-    ngx_rbtree_node_t     *right;
-    ngx_rbtree_node_t     *parent;
-    u_char                 color;
-    u_char                 data;
+    ngx_rbtree_key_t       key;//无符号的键值
+    ngx_rbtree_node_t     *left;//左子节点
+    ngx_rbtree_node_t     *right;//右子节点
+    ngx_rbtree_node_t     *parent;//父节点
+    u_char                 color;//节点颜色，0表示黑色，1表示红色
+    u_char                 data;//数据
 };
 
 
@@ -35,41 +35,48 @@ typedef void (*ngx_rbtree_insert_pt) (ngx_rbtree_node_t *root,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
 
 struct ngx_rbtree_s {
-    ngx_rbtree_node_t     *root;
-    ngx_rbtree_node_t     *sentinel;
-    ngx_rbtree_insert_pt   insert;
+    ngx_rbtree_node_t     *root;//根节点
+    ngx_rbtree_node_t     *sentinel;//设置树的哨兵节点
+    ngx_rbtree_insert_pt   insert;//插入方法的函数指针
 };
 
-
+//初始化红黑树
 #define ngx_rbtree_init(tree, s, i)                                           \
     ngx_rbtree_sentinel_init(s);                                              \
     (tree)->root = s;                                                         \
     (tree)->sentinel = s;                                                     \
     (tree)->insert = i
 
-
+//向红黑树中插入节点node
 void ngx_rbtree_insert(ngx_thread_volatile ngx_rbtree_t *tree,
     ngx_rbtree_node_t *node);
+//删除红黑树中的node结点
 void ngx_rbtree_delete(ngx_thread_volatile ngx_rbtree_t *tree,
     ngx_rbtree_node_t *node);
+//添加节点，每个节点的关键字是唯一的
 void ngx_rbtree_insert_value(ngx_rbtree_node_t *root, ngx_rbtree_node_t *node,
     ngx_rbtree_node_t *sentinel);
+//向红黑树中添加节点，关键字表示时间或者时间差
 void ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *root,
     ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
 
-
+//设置节点颜色为红色
 #define ngx_rbt_red(node)               ((node)->color = 1)
+//设置节点颜色为黑色
 #define ngx_rbt_black(node)             ((node)->color = 0)
+//若节点颜色为红色返回非0，否则返回0
 #define ngx_rbt_is_red(node)            ((node)->color)
+//若节点颜色为黑色返回非0，否则返回0
 #define ngx_rbt_is_black(node)          (!ngx_rbt_is_red(node))
+//把节点2的颜色赋值给节点1
 #define ngx_rbt_copy_color(n1, n2)      (n1->color = n2->color)
 
 
 /* a sentinel must be black */
-
+//初始化哨兵节点，实际设置颜色为黑色
 #define ngx_rbtree_sentinel_init(node)  ngx_rbt_black(node)
 
-
+//查找树的最小值
 static ngx_inline ngx_rbtree_node_t *
 ngx_rbtree_min(ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
 {

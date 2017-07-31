@@ -32,9 +32,9 @@ typedef void (*ngx_pool_cleanup_pt)(void *data);
 typedef struct ngx_pool_cleanup_s  ngx_pool_cleanup_t;
 
 struct ngx_pool_cleanup_s {
-    ngx_pool_cleanup_pt   handler;
-    void                 *data;
-    ngx_pool_cleanup_t   *next;
+    ngx_pool_cleanup_pt   handler;//clean 函数
+    void                 *data; //要销毁的内存
+    ngx_pool_cleanup_t   *next; //下一下clean函数
 };
 
 
@@ -42,54 +42,50 @@ typedef struct ngx_pool_large_s  ngx_pool_large_t;
 
 struct ngx_pool_large_s {
     ngx_pool_large_t     *next;
-    void                 *alloc;
+    void                 *alloc; //大块内存
 };
 
+typedef struct {    //内存池的数据结构模块  
+	u_char               *last;    //当前内存分配结束位置，即下一段可分配内存的起始位置  
+	u_char               *end;     //内存池的结束位置  
+	ngx_pool_t           *next;    //链接到下一个内存池，内存池的很多块内存就是通过该指针连成链表的  
+	ngx_uint_t            failed;  //记录内存分配不能满足需求的失败次数  
+} ngx_pool_data_t;   //结构用来维护内存池的数据块，供用户分配之用。  
 
-typedef struct {
-    u_char               *last;
-    u_char               *end;
-    ngx_pool_t           *next;
-    ngx_uint_t            failed;
-} ngx_pool_data_t;
-
-
-struct ngx_pool_s {
-    ngx_pool_data_t       d;
-    size_t                max;
-    ngx_pool_t           *current;
-    ngx_chain_t          *chain;
-    ngx_pool_large_t     *large;
-    ngx_pool_cleanup_t   *cleanup;
-    ngx_log_t            *log;
-};
-
+struct ngx_pool_t {  //内存池的管理分配模块  
+    ngx_pool_data_t       d;         //内存池的数据块  
+    size_t                max;       //数据块大小，小块内存的最大值  
+    ngx_pool_t           *current;   //指向当前可分配的内存池 
+    ngx_chain_t          *chain;     //该指针挂接一个ngx_chain_t结构  
+    ngx_pool_large_t     *large;     //指向大块内存分配，nginx中，大块内存分配直接采用标准系统接口malloc  
+    ngx_pool_cleanup_t   *cleanup;   //析构函数，挂载内存释放时需要清理资源的一些必要操作  
+    ngx_log_t            *log;       //内存分配相关的日志记录  
+}; 
 
 typedef struct {
     ngx_fd_t              fd;
     u_char               *name;
     ngx_log_t            *log;
-} ngx_pool_cleanup_file_t;
+} ngx_pool_cleanup_file_t; //文件内存的销毁
 
 
-void *ngx_alloc(size_t size, ngx_log_t *log);
-void *ngx_calloc(size_t size, ngx_log_t *log);
+void *ngx_alloc(size_t size, ngx_log_t *log);//malloc的封装
+void *ngx_calloc(size_t size, ngx_log_t *log);//malloc的封装，内存经过初始化
 
-ngx_pool_t *ngx_create_pool(size_t size, ngx_log_t *log);
-void ngx_destroy_pool(ngx_pool_t *pool);
-void ngx_reset_pool(ngx_pool_t *pool);
+ngx_pool_t *ngx_create_pool(size_t size, ngx_log_t *log);//创建内存池
+void ngx_destroy_pool(ngx_pool_t *pool);//销毁内存池，包括大块内存
+void ngx_reset_pool(ngx_pool_t *pool);//重置内存池，会释放大块内存
 
-void *ngx_palloc(ngx_pool_t *pool, size_t size);
-void *ngx_pnalloc(ngx_pool_t *pool, size_t size);
-void *ngx_pcalloc(ngx_pool_t *pool, size_t size);
-void *ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment);
-ngx_int_t ngx_pfree(ngx_pool_t *pool, void *p);
+void *ngx_palloc(ngx_pool_t *pool, size_t size);//申请内存，内存经过对齐
+void *ngx_pnalloc(ngx_pool_t *pool, size_t size);//申请内存，内存没有经过对齐
+void *ngx_pcalloc(ngx_pool_t *pool, size_t size);//申请内存，内存经过对齐，且申请的内存经过初始化
+void *ngx_pmemalign(ngx_pool_t *pool, size_t size, size_t alignment);//申请大块内存，内存经过对齐
+ngx_int_t ngx_pfree(ngx_pool_t *pool, void *p);//释放所有大块内存
 
-
-ngx_pool_cleanup_t *ngx_pool_cleanup_add(ngx_pool_t *p, size_t size);
-void ngx_pool_run_cleanup_file(ngx_pool_t *p, ngx_fd_t fd);
-void ngx_pool_cleanup_file(void *data);
-void ngx_pool_delete_file(void *data);
+ngx_pool_cleanup_t *ngx_pool_cleanup_add(ngx_pool_t *p, size_t size);//添加cleanup大小为size（data）
+void ngx_pool_run_cleanup_file(ngx_pool_t *p, ngx_fd_t fd);//清楚所有的cleanup
+void ngx_pool_cleanup_file(void *data);//关闭文件，data指向ngx_pool_cleanup_file_t
+void ngx_pool_delete_file(void *data);//删除文件，data指向ngx_pool_cleanup_file_t
 
 
 #endif /* _NGX_PALLOC_H_INCLUDED_ */

@@ -271,11 +271,11 @@ typedef uint32_t                    ngx_atomic_uint_t;
 typedef volatile ngx_atomic_uint_t  ngx_atomic_t;
 #define NGX_ATOMIC_T_LEN            (sizeof("-2147483648") - 1)
 
-
+/*将old的参数和lock比较，如果相同就把lock设置为set*/
 static ngx_inline ngx_atomic_uint_t
 ngx_atomic_cmp_set(ngx_atomic_t *lock, ngx_atomic_uint_t old,
      ngx_atomic_uint_t set)
-{
+{//
      if (*lock == old) {
          *lock = set;
          return 1;
@@ -284,14 +284,14 @@ ngx_atomic_cmp_set(ngx_atomic_t *lock, ngx_atomic_uint_t old,
      return 0;
 }
 
-
+/*value加上add，同时返回原来的value值*/
 static ngx_inline ngx_atomic_int_t
 ngx_atomic_fetch_add(ngx_atomic_t *value, ngx_atomic_int_t add)
 {
      ngx_atomic_int_t  old;
 
      old = *value;
-     *value += add;
+     *value += add;//加上add
 
      return old;
 }
