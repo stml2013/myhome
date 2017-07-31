@@ -1,0 +1,210 @@
+1 ngx_queue_t简介
+
+ngx_queue_t是nginx提供的一个轻量级的双向链表容器，它不负责存储数据，既不提供数据的内存分配，它只有两个指针负责把数据链入链表，它跟stl提供的queue不同，stl提供的queue帮助用户存储数据，用户只需要相容器里添加数据即可，而ngx_queue_t,用户必须自己提供存储数据的内存，并且必须定义一种数据结构把ngx_queue_t包含在其中，然后利用ngx_queue_t提供的函数来进行相应的操作。
+
+2 ngx_queue_t结构及其操作
+
+2.1 ngx_queue_t
+
+struct ngx_queue_s {
+    ngx_queue_t  *prev;
+    ngx_queue_t  *next;
+};
+
+ngx_queue_t只提供一个指向前驱和一个指向后继的指针，结构非常简单，这也是其能够通用性的原因。
+
+2.2 操作函数
+
+ngx_queue_init(q)            //初始化链表
+ngx_queue_empty(h)           //判断链表是否为空                                                   
+ngx_queue_insert_head(h, x)  //在头部插入一个元素                                       
+ngx_queue_insert_after       //在h元素前面插入一个元素
+ngx_queue_insert_tail(h, x)  //在h尾部插入一个元素 
+ngx_queue_head(h)            //返回第一个元素
+#define ngx_queue_last(h)    //返回最后一个元素 
+ngx_queue_sentinel(h)        //返回链表容器结构体的指针
+ngx_queue_next(q)            //返回下一个q的下一个元素  
+ngx_queue_prev(q)            //返回q的前一个元素
+ngx_queue_remove(x)          //删除x结点                                           
+ngx_queue_split(h, q, n)     //把h分为两个链表h和n，并且n的第一元素为q
+ngx_queue_add(h, n)          //把链表n增加到h链表的尾部
+ngx_queue_data(q, type, link)//取出包含q的type类型的地址，这样我们就可以访问type内的成员
+
+
+ngx_queue_t提供了14个常用的操作给用户使用，基本涵盖了插入、删除、移动，访问数据等等操作，这14个函数都是宏定义，有兴趣的可以看下源码，非常简单。这里说一个最后一个操作函数ngx_queue_data:
+
+#define ngx_queue_data(q, type, link)                                         \
+    (type *) ((u_char *) q - offsetof(type, link))
+
+q为ngx_queue_t的指针， type是用户自定义的包含ngx_queue_t的数据类型type，link是type的成员，类型是ngx_queue_t。
+
+这里举个列子来说明这个操作的用法。
+
+先看一个自定义的结构体：
+
+typedef struct
+{
+	ngx_int_t num;
+	ngx_str_t str;
+	ngx_queue_t queue;
+}TestNode;
+
+如果我们有一个ngx_queue_t的指针q指向testNode.queue,现在我们不知到testNode的地址，只知道queue，如果我们想访问testNode里面的成员num，我们必须知道testNode的地址，这样才能访问其num成员。怎样知道testNode的地址呢？这时候ngx_queue_data就闪亮登场了。我们可以用一下语句来取得testNode的地址：
+
+TestNode* testnode  = ngx_queue_data(q, TestNode, queue);
+
+这样我们就可以访问num了。
+2.3 ngx_queue_middle
+
+这个函数取出链表中间位置的节点。用一个慢指针midlle和一个快指针next,middle没走一步，next走两步，当next指针到达链表未的时候，midlle就指向链表的中间位置。
+
+
+ngx_queue_t *
+ngx_queue_middle(ngx_queue_t *queue)
+{
+    ngx_queue_t  *middle, *next;
+
+    middle = ngx_queue_head(queue);
+
+    if (middle == ngx_queue_last(queue)) {
+        return middle;
+    }
+
+    next = ngx_queue_head(queue);
+
+    for ( ;; ) {//middle每前进 一步，next都要前进两步，直到链表的尾部
+        middle = ngx_queue_next(middle);
+
+        next = ngx_queue_next(next);
+
+        if (next == ngx_queue_last(queue)) {
+            return middle;
+        }
+
+        next = ngx_queue_next(next);
+
+        if (next == ngx_queue_last(queue)) {
+            return middle;
+        }
+    }
+}
+
+
+2.4 ngx_ngx_queue_sort
+
+void
+ngx_queue_sort(ngx_queue_t *queue,
+    ngx_int_t (*cmp)(const ngx_queue_t *, const ngx_queue_t *))
+{
+    ngx_queue_t  *q, *prev, *next;
+
+    q = ngx_queue_head(queue);
+
+    if (q == ngx_queue_last(queue)) {
+        return;
+    }
+
+    //遍历链表中的每一个元素，然后遍历它前面的元素是否比它大，直到找到不比它大第一个元素，然后插入。
+    for (q = ngx_queue_next(q); q != ngx_queue_sentinel(queue); q = next) {
+
+        prev = ngx_queue_prev(q);
+        next = ngx_queue_next(q);
+
+        ngx_queue_remove(q);
+
+        do {//遍历它前面的元素
+            if (cmp(prev, q) <= 0) {
+                break;
+            }
+
+            prev = ngx_queue_prev(prev);
+
+        } while (prev != ngx_queue_sentinel(queue));
+
+        ngx_queue_insert_after(prev, q);//q前面的元素必须是小于q
+    }
+}
+
+
+3 一个例子
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_conf_file.h>
+#include <nginx.h>
+#include <ngx_queue.h>
+
+//////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+//这两个东东必须写，不为有编译错误
+volatile ngx_cycle_t  *ngx_cycle;
+
+void ngx_log_error_core(ngx_uint_t level, ngx_log_t *log, ngx_err_t err,
+            const char *fmt, ...)
+{
+}
+//////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////
+
+typedef struct
+{
+	ngx_int_t num;
+	ngx_str_t str;
+	ngx_queue_t queue;
+}TestNode;
+
+ngx_int_t compare_node(const ngx_queue_t *left, const ngx_queue_t *right)
+{
+	TestNode* left_node  = ngx_queue_data(left, TestNode, queue);
+	TestNode* right_node = ngx_queue_data(right, TestNode, queue);
+	
+	return left_node->num > right_node->num;
+}
+
+
+int main()
+{
+    ngx_queue_t QueHead;
+	ngx_queue_init(&QueHead);
+
+	TestNode Node[10];
+	ngx_int_t i;
+	for (i=0; i<10; ++i)
+	{
+		Node[i].num = rand()%100;
+	}
+
+    ngx_queue_insert_head(&QueHead, &Node[0].queue);
+	ngx_queue_insert_tail(&QueHead, &Node[1].queue);
+	ngx_queue_insert_after(&QueHead, &Node[2].queue);
+    ngx_queue_insert_head(&QueHead, &Node[4].queue);
+	ngx_queue_insert_tail(&QueHead, &Node[3].queue);
+    ngx_queue_insert_head(&QueHead, &Node[5].queue);
+	ngx_queue_insert_tail(&QueHead, &Node[6].queue);
+	ngx_queue_insert_after(&QueHead, &Node[7].queue);
+    ngx_queue_insert_head(&QueHead, &Node[8].queue);
+	ngx_queue_insert_tail(&QueHead, &Node[9].queue);
+
+	ngx_queue_t *q;
+	for (q = ngx_queue_head(&QueHead); q != ngx_queue_sentinel(&QueHead); q = ngx_queue_next(q))
+	{
+		TestNode* Node = ngx_queue_data(q, TestNode, queue);
+		printf("Num=%d\n", Node->num);
+	}
+
+    ngx_queue_sort(&QueHead, compare_node);
+	
+    printf("\n");
+	for (q = ngx_queue_head(&QueHead); q != ngx_queue_sentinel(&QueHead); q = ngx_queue_next(q))
+	{
+		TestNode* Node = ngx_queue_data(q, TestNode, queue);
+		printf("Num=%d\n", Node->num);
+	}
+    
+	return 0;
+}
+
+
+http://blog.csdn.net/xiaoliangsky/article/details/39646141

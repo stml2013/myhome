@@ -1,0 +1,358 @@
+///////////////////////////////////////////////////////////////////////////
+一 信号
+信号是UNIX和Linux系统响应某些条件而产生的一个事件，接收到该信号的进程会相应地采取一些行动。通常信号是由一个错误产生的。但它们还可以作为进程间通信或修改行为的一种方式，明确地由一个进程发送给另一个进程。一个信号的产生叫生成，接收到一个信号叫捕获。
+二 信号的种类
+Signal         Description
+SIGABRT   由调用abort函数产生，进程非正常退出
+SIGALRM   用alarm函数设置的timer超时或setitimer函数设置的interval timer超时
+SIGBUS    某种特定的硬件异常，通常由内存访问引起
+SIGCANCEL 由Solaris Thread Library内部使用，通常不会使用
+SIGCHLD   进程Terminate或Stop的时候，SIGCHLD会发送给它的父进程。缺省情况下该Signal会被忽略
+SIGCONT   当被stop的进程恢复运行的时候，自动发送
+SIGEMT    和实现相关的硬件异常
+SIGFPE    数学相关的异常，如被0除，浮点溢出，等等
+SIGFREEZE Solaris专用，Hiberate或者Suspended时候发送
+SIGHUP    发送给具有Terminal的Controlling Process，当terminal被disconnect时候发送
+SIGILL    非法指令异常
+SIGINFO   BSD signal。由Status Key产生，通常是CTRL+T。发送给所有Foreground Group的进程
+SIGINT    由Interrupt Key产生，通常是CTRL+C或者DELETE。发送给所有ForeGround Group的进程
+SIGIO     异步IO事件
+SIGIOT    实现相关的硬件异常，一般对应SIGABRT
+SIGKILL   无法处理和忽略。中止某个进程
+SIGLWP    由Solaris Thread Libray内部使用
+SIGPIPE   在reader中止之后写Pipe的时候发送
+SIGPOLL   当某个事件发送给Pollable Device的时候发送
+SIGPROF   Setitimer指定的Profiling Interval Timer所产生
+SIGPWR    和系统相关。和UPS相关。
+SIGQUIT   输入Quit Key的时候（CTRL+/）发送给所有Foreground Group的进程
+SIGSEGV   非法内存访问
+SIGSTKFLT Linux专用，数学协处理器的栈异常
+SIGSTOP   中止进程。无法处理和忽略。
+SIGSYS    非法系统调用
+SIGTERM   请求中止进程，kill命令缺省发送
+SIGTHAW   Solaris专用，从Suspend恢复时候发送
+SIGTRAP   实现相关的硬件异常。一般是调试异常
+SIGTSTP   Suspend Key，一般是Ctrl+Z。发送给所有Foreground Group的进程
+SIGTTIN   当Background Group的进程尝试读取Terminal的时候发送
+SIGTTOU   当Background Group的进程尝试写Terminal的时候发送
+SIGURG    当out-of-band data接收的时候可能发送
+SIGUSR1   用户自定义signal 1
+SIGUSR2   用户自定义signal 2
+SIGVTALRM setitimer函数设置的Virtual Interval Timer超时的时候
+SIGWAITING Solaris Thread Library内部实现专用
+SIGWINCH  当Terminal的窗口大小改变的时候，发送给Foreground Group的所有进程
+SIGXCPU   当CPU时间限制超时的时候
+SIGXFSZ   进程超过文件大小限制
+SIGXRES   Solaris专用，进程超过资源限制的时候发送
+三 信号相关的函数
+1 signal函数
+void (*signal(int sig, void (*func)(int)))(int); 
+signal是一个带有sig和func两个参数的函数，func是一个类型为void (*)(int)的函数指针。该函数返回一个与func相同类型的指针，指向先前指定信号处理函数的函数指针。准备捕获的信号的参数由sig给出，接收到的指定信号后要调用的函数由参数func给出。其实这个函数的使用是相当简单的，通过下面的例子就可以知道。注意信号处理函数的原型必须为void func（int），或者是下面的特殊值：
+    SIG_IGN:忽略信号
+    SIG_DFL:恢复信号的默认行为
+这个函数常常可以用下面要将的sigaction函数替代。
+
+2 sigaction
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oact);
+该函数与signal函数一样，用于设置与信号sig关联的动作，而oact如果不是空指针的话，就用它来保存原先对该信号的动作的位置，act则用于设置指定信号的动作。
+
+参数结构体sigaction定义如下：
+struct sigaction{
+	void       (*sa_handler)(int);
+	void       (*sa_sigaction)(int, siginfo_t*, void*);
+	sigset_t   sa_mask;
+	int        sa_flags;
+	void       (*sa_restorer)(void);
+};
+
+信号集sigset_t结构体：
+typedef struct
+{
+	unsigned long sig[_NSIG_WORDS];
+}sigset_t;
+
+信号处理函数可以采用void (*sa_handler)(int)或void (*sa_sigaction)(int, siginfo_t *, void *)。到底采用哪个要看sa_flags中是否设置了SA_SIGINFO位，如果设置了就采用void (*sa_sigaction)(int, siginfo_t *, void *)，此时可以向处理函数发送附加信息；默认情况下采用void (*sa_handler)(int)，此时只能向处理函数发送信号的数值。
+sa_handler    此参数和signal()的参数handler相同，代表新的信号处理函数，其他意义请参考signal()。
+sa_mask       用来设置在处理该信号时暂时将sa_mask指定的信号集搁置。
+sa_restorer   此参数没有使用。
+sa_flags      用来设置信号处理的其他相关操作，下列的数值可用：
+sa_flags      还可以设置其他标志：
+SA_RESETHAND  当调用信号处理函数时，将信号的处理函数重置为缺省值SIG_DFL
+SA_RESTART    如果信号中断了进程的某个系统调用，则系统自动启动该系统调用
+SA_NODEFER    一般情况下， 当信号处理函数运行时，内核将阻塞该给定信号。但是如果设置了 SA_NODEFER标记， 那么在该信号处理函数运行时，内核将不会阻塞该信号。
+
+返回值
+执行成功则返回0，如果有错误则返回-1。
+错误代码
+EINVAL 参数signum 不合法， 或是企图拦截SIGKILL/SIGSTOPSIGKILL信号
+EFAULT 参数act，oldact指针地址无法存取。
+EINTR  此调用被中断
+
+下面一个简单的例子，程序里面的sigemptyset、kill函数会在后面讲
+action.c实例代码：
+
+3 sigaddset sigdelset
+int sigaddset(sigset_t *set, int signum);
+sigaddset()用来将参数signum 代表的信号加入至参数set 信号集里。
+返回值
+执行成功则返回0，如果有错误则返回-1。
+错误代码
+EFAULT 参数set指针地址无法存取
+EINVAL 参数signum非合法的信号编号
+
+int sigdelset(sigset_t *set, int signum)
+sigdelset()用来将参数signum代表的信号从参数set信号集里删除。
+返回值 
+执行成功则返回0
+如果有错误则返回-1。
+错误代码 
+EFAULT 参数set指针地址无法存取
+EINVAL 参数signum非合法的信号编号
+
+4 sigemptyset sigfillset
+int sigemptyset(sigset_t *set);
+sigemptyset()用来将参数set信号集初始化并清空。
+返回值
+执行成功返回0；
+失败返回-1。
+错误代码
+EFAULT 参数set指针地址无法存取
+
+int sigfillset(sigset_t * set);
+sigfillset()用来将参数set信号集初始化，然后把所有的信号加入到此信号集里。
+返回值
+执行成功返回0；
+失败返回-1。
+错误代码
+EFAULT 参数set指针地址无法存取
+
+5 sigismember
+int sigismember(const sigset_t *set,int signum);
+sigismember()用来测试参数signum 代表的信号是否已加入至参数set信号集里。如果信号集里已有该信号则返回1，否则返回0。
+返回值
+信号集已有该信号则返回1；
+没有则返回0；
+如果有错误则返回-1。
+错误代码 
+EFAULT 参数set指针地址无法存取
+EINVAL 参数signum 非合法的信号编号
+
+6 sigpending
+int sigpending(sigset_t *set);
+sigpending()会将被搁置的信号集合由参数set指针返回
+返回值执 
+行成功则返回0，
+如果有错误则返回-1。
+错误代码 
+EFAULT 参数set指针地址无法存取
+EINTR  此调用被中断。
+
+7 sigprocmask
+int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+一个进程的信号屏蔽字规定了当前阻塞而不能传送给该进程的信号集。sigprocmask()可以用来检测或改变目前的信号屏蔽字，其操作参数how来决定，如果参数oldset不是NULL指针，那么当前的信号屏蔽字会由此指针返回。如果set是一个非空指针，则参数how指示如何修改当前信号屏蔽字。每个进程都有一个用来描述哪些信号递送到进程时将被阻塞的信号集，该信号集中的所有信号在传送到进程后都将被阻塞。
+参数how：
+SIG_BLOCK:该进程新的信号屏蔽字是其当前信号屏蔽字和set指向信号集的并集，set包含了我们希望阻塞的附件信号。
+SIG_UNBLOCK:该进程新的信号集屏蔽字是其当前信号屏蔽字和set所指向信号集的补集的交集。set包含了我们希望解除阻塞的信号。
+SIG_SETMASK:该进程新的信号屏蔽是set指向的值。
+注意：
+1）除SIG_SETMASK外，如果set是个空指针，则不改变该进程的信号屏蔽字，这时how的值也没有意义。
+2）SIG_SETMASK与set空指针结合使用，即清空所有屏蔽的信号。
+返回值：
+执行成功返回0；
+失败返回-1。
+错误码
+EFAULT：参数set、oldsset指针地址无法获取
+EINTR：此调用被中断
+
+下面是一个测试例子，测试被屏蔽的信号：
+aigprocmask.c的实例代码：
+
+8 sigsuspend
+int sigsuspend(const sigset_t *mask);
+函数sigsuspend将进程的信号屏蔽码设置为mask，然后与pause()函数一样等待信号的发生并执行完信号处理函数。信号处理函数执行完后再把进程的信号屏蔽码设置为原来的屏蔽字，然后sigsuspend函数才返回。 
+返回值
+sigsuspend总是返回-1
+下面是一个sigsuspend的例子：
+sigsuspend的实例代码：
+
+
+
+///////////////////////////////////////////////////////////////////////////
+unsigned int alarm(unsigned int seconds);
+alarm也称为闹钟函数，alarm()用来设置信号SIGALRM在经过参数seconds指定的秒数后传送给目前的进程。如果参数seconds为0，则之前设置的闹钟会被取消，并将剩下的时间返回。要注意的是，一个进程只能有一个闹钟时间，如果在调用alarm之前已设置过闹钟时间，则任何以前的闹钟时间都被新值所代替。
+返回值
+函数调用成功：如果调用此alarm()前，进程已经设置了闹钟时间，则返回上一个闹钟的剩余秒数，如果之前没有设置闹钟则返回0。
+函数调用失败返回-1；
+#include<unistd.h>
+#include<signal.h>
+
+void alarm_handler()
+{
+	int pretime;
+	//仅仅输出一个调用函数
+	fprintf(stdout, "alarm_handler is called!");
+	//再次设置闹钟信号
+	signal(SIGALARM, alarm_handler);
+	pretime = alarm(5);
+	
+	fprintf(stdout, "And pretime is %d \n", pretime);
+}
+
+int main()
+{
+	int     i;
+
+	signale(SIGALARM, alarm_handler);
+
+	for (i = 0; i < 15; ++i)
+	{
+		printf("sleep time is %d\n", i+1);
+		sleep(1);
+	}
+
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

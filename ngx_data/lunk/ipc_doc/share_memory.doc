@@ -1,0 +1,172 @@
+shmid_ds数据结构表示每个新建的共享内存。当shmget()创建了一块新的共享内存后，返回一个可以用于引用该共享内存的shmid_ds数据结构的标识符。
+
+include/linux/shm.h
+
+    struct shmid_ds { 
+        struct ipc_perm    shm_perm;      /* operation perms */ 
+        int                shm_segsz;     /* size of segment (bytes) */ 
+        __kernel_time_t    shm_atime;     /* last attach time */ 
+        __kernel_time_t    shm_dtime;     /* last detach time */ 
+        __kernel_time_t    shm_ctime;     /* last change time */ 
+        __kernel_ipc_pid_t shm_cpid;      /* pid of creator */ 
+        __kernel_ipc_pid_t shm_lpid;      /* pid of last operator */ 
+        unsigned short     shm_nattch;    /* no. of current attaches */ 
+        unsigned short     shm_unused;    /* compatibility */ 
+        void               *shm_unused2; /* ditto - used by DIPC */ 
+        void               *shm_unused3; /* unused */ 
+    };
+
+
+struct ipc_perm
+-----------------------------------------------
+    对于每个IPC对象，系统共用一个struct ipc_perm的数据结构来存放权限信息，以确定一个ipc操作是否可以访问该IPC对象。
+
+    struct ipc_perm { 
+        __kernel_key_t   key; 
+        __kernel_uid_t   uid; 
+        __kernel_gid_t   gid; 
+        __kernel_uid_t   cuid; 
+        __kernel_gid_t   cgid; 
+        __kernel_mode_t mode; 
+        unsigned short   seq; 
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void* mmap(void *start, size_t length, int port, int flags, int fd, off_t offset);
+mmap可以将磁盘文件映射到内存中，直接操作内存时Linux负责同步磁盘文件中的数据，
+fd参数就指向需要同步的磁盘文件
+offset表示从文件的这个偏移处开始共享
+flags参数中有MAP_ANON和MAP_ANONYMOUS参数时表示不使用文件映射方式，
+这时候就不许要fs和offset这两个参数。
+length表示在内存中开辟的线性空间大小
+prot参数表示操作这段共享内存的方式（如只读或可读写）
+start参数表示希望的共享内存内存起始映射地址，当然可以设为NULL
+应用参考ngx_shm_alloc
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void munmap(void *start, size_t length);
+start共享内存的首地址，
+length共享内存的长度
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+shmget
+int shmget(key_t key, size_t size, int shmflag);
+key: 标识符的规则
+size:共享存储段的字节数
+flag:读写的权限
+返回值：成功返回共享存储的id，失败返回-1
+
+key 标识共享内存的键值：0/IPC_PRIVATE。当key的取值为IPC_PRIVATE创建一块新的内存；如果key的取值为0，而参数shmflg中设置了IPC_PRIVATE这个标志，则同样将创建一块新的共享内存。
+在IPC的通信模式下，不管是使用消息队列还是共享内存，甚至是信号量，每个IPC的对象(object)都有唯一的名字，称为“键”(key)。通过“键”，进程能够识别所用的对象。“键”与IPC对象的关系就如同文件名称之于文件，通过文件名，进程能够读写文件内的数据，甚至多个进程能够共用一个文件。而在IPC的通讯模式下，通过“键”的使用也使得一个IPC对象能为多个进程所共用。
+Linux系统中的所有表示System V中IPC对象的数据结构都包括一个ipc_perm结构，其中包含有IPC对象的键值，该键用于查找System V中IPC对象的引用标识符。如果不使用“键”，进程将无法存取IPC对象，因为IPC对象并不存在于进程本身使用的内存中。
+通常，都希望自己的程序能和其他的程序预先约定一个唯一的键值，但实际上并不是总可能的成行的，因为自己的程序无法为一块共享内存选择一个键值。因此，在此把key设为IPC_PRIVATE，这样，操作系统将忽略键，建立一个新的共享内存，指定一个键值，然后返回这块共享内存IPC标识符ID。而将这个新的共享内存的标识符ID告诉其他进程可以在建立共享内存后通过派生子进程，或写入文件或管道来实现。
+
+int size(单位字节Byte)
+-----------------------------------------------
+    size是要建立共享内存的长度。所有的内存分配操作都是以页为单位的。所以如果一段进程只申请一块只有一个字节的内存，内存也会分配整整一页(在i386机器中一页的缺省大小PACE_SIZE=4096字节)这样，新创建的共享内存的大小实际上是从size这个参数调整而来的页面大小。即如果size为1至4096，则实际申请到的共享内存大小为4K(一页)；4097到8192，则实际申请到的共享内存大小为8K(两页)，依此类推。
+
+int shmflg
+-----------------------------------------------
+    shmflg主要和一些标志有关。其中有效的包括IPC_CREAT和IPC_EXCL，它们的功能与open()的O_CREAT和O_EXCL相当。
+    IPC_CREAT   如果共享内存不存在，则创建一个共享内存，否则打开操作。
+    IPC_EXCL    只有在共享内存不存在的时候，新的共享内存才建立，否则就产生错误。
+
+    如果单独使用IPC_CREAT，shmget()函数要么返回一个已经存在的共享内存的操作符，要么返回一个新建的共享内存的标识符。如果将IPC_CREAT和IPC_EXCL标志一起使用，shmget()将返回一个新建的共享内存的标识符；如果该共享内存已存在，或者返回-1。IPC_EXEL标志本身并没有太大的意义，但是和IPC_CREAT标志一起使用可以用来保证所得的对象是新建的，而不是打开已有的对象。对于用户的读取和写入许可指定SHM_R和SHM_W,(SHM_R>3)和(SHM_W>3)是一组读取和写入许可，而(SHM_R>6)和(SHM_W>6)是全局读取和写入许可。
+
+
+返回值
+-----------------------------------------------
+成功返回共享内存的标识符；不成功返回-1，errno储存错误原因。
+    EINVAL        参数size小于SHMMIN或大于SHMMAX。
+    EEXIST        预建立key所致的共享内存，但已经存在。
+    EIDRM         参数key所致的共享内存已经删除。
+    ENOSPC        超过了系统允许建立的共享内存的最大值(SHMALL )。
+    ENOENT        参数key所指的共享内存不存在，参数shmflg也未设IPC_CREAT位。
+    EACCES        没有权限。
+    ENOMEM        核心内存不足。
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void* shmat(int shmid, const void *shmaddr, int shmflag);
+连接共享内存标识符为shmid的共享内存，连接成功后把共享内存区对象映射到调用
+进程的地址空间，随后可以像在本地空间一样访问。
+shmid 共享内存标识符，由shmget函数返回的id
+shmaddr 指点共享内存出现在进程内存地址的什么位置，直接指定为NULL时，有内核自己决定
+一个合适的地址位置。
+shmflg SHM_RDONLY:为只读模式，其他为读写模式
+返回值：
+成功：附件好的共享内存地址
+出错：-1，错误原因存在于error中
+注意:fork后子进程继承已连接的共享内存地址。exec后该子进程与共享的内存地址自动脱离。
+进程结束后，已连接的共享内存地址会自动脱离。
+错误代码：
+EACCES:无权限已指定方式连接共享内存
+EINVAL：	无效的参数shmid或shmaddr
+ENOEME:核心内存不足
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int shmdt(const void *shmaddr);
+用来断开与共享内存附加点的地址空间，阻止本进程访问此片共享内存。
+shmaddr:连接的共享内存的起始地址
+返回：
+成功返回0
+出错返回-1，错误原因存在于error中
+注意：本函数调用并不删除所指定的共享内存区，而只是将先前用shmat函数连接（attach）好的共享内存脱离（detach）目前的进程
+错误代码：
+EINVAL：无效的参数shmaddr
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+int shmctl(int shmid, int cmd, struct shmid_ds *buf);
+完成共享内存的控制。
+shmid 共享内存标识符
+cmd IPC_STAT:得到共享内存的状态，把共享内存的shmid_ds结构复制到buf;
+	IPC_SET:改变共享内存的状态，把shmid_ds中的uid、gid、mode复制到共享内存的shmid_ds结构体。
+	IPC_RMID：删除这片共享内存
+buf 共享内存管理结构体。具体说明参见贡献内存内核结构定义部分。
+返回：
+成功返回0
+出错返回-1，错误原因存在于error中
+错误代码：
+	EACCESS：参数cmd为IPC_STAT，确无权限读取该共享内存
+	EFAULT：参数buf指向无效的内存地址
+	EIDRM：标识符为msqid的共享内存已被删除
+	EINVAL：无效的参数cmd或shmid
+	EPERM：参数cmd为IPC_SET或IPC_RMID，却无足够的权限执行
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

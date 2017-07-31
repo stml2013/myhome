@@ -1,0 +1,71 @@
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
+
+int main()
+{
+	int   fd;
+	int   var;
+
+	if ((fd = open("test.txt", O_RDWR | O_CREAT | O_EXCL, 0664)) == -1)
+	{
+		perror("open error");
+		exit(1);
+	}
+
+	if ((var = fcntl(fd, F_GETFL, 0)) < 0)
+	{
+		perror("fcntl error");
+		close(fd);
+		exit(1);
+	}
+
+	switch(var & O_ACCMODE)
+	{
+		case O_RDONLY:
+			printf("Read only..\n");
+			break;
+		case O_WRONLY:
+			printf("Write only..\n");
+			break;
+		case O_RDWR:
+			printf("Read And Write..\n");
+			break;
+		default:
+			printf("Do't know..\n");
+			break;
+	}
+
+	if (var & O_APPEND)
+	{
+		printf("And Append..\n");
+	}
+
+	if (var & O_NONBLOCK)
+	{
+		printf("And Nonblocking..\n");
+	}
+
+	if (close(fd) == -1)
+	{
+		perror("close error");
+	}
+	
+	return 0;
+}
+*/
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main()
+{
+	
+	return 0;
+}
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

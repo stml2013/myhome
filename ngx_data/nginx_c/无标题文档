@@ -1,0 +1,21 @@
+CXX = gcc
+CXXFLAGS += -g -Wall -Wextra
+
+TARGET_FILE = strerr
+SRC_FILE = $(TARGET_FILE).c
+OBJ_FILE = $(TARGET_FILE).o
+EXE_FILE = $(TARGET_FILE)
+
+TARGETS = $(EXE_FILE)
+
+CLEAN_FILES = rm -i -f $(TARGETS) *.o
+
+all:$(TARGETS)
+$(EXE_FILE):$(OBJ_FILE)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+$(OBJ_FILES):$(SRC_FILE)
+	$(CXX) -c $(CXXFLAGS) $>
+
+.PHONY:clean
+clean:
+	$(CLEAN_FILES)

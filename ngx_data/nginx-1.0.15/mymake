@@ -1,0 +1,13 @@
+gcc -c -pipe  -O -W -Wall -Wpointer-arith -Wno-unused-parameter -Wunused-function -Wunused-variable -Wunused-value \
+-Werror -g -finstrument-functions \
+-I src/core \
+-I src/event \
+-I src/event/modules \
+-I src/os/unix \
+-I /home/wyp/下载/pcre-8.33 \
+-I /home/wyp/下载/openssl-0.9.8o/.openssl/include \
+-I /home/wyp/下载/zlib-1.2.8 \
+-I objs \
+-o objs/src/core/nginx.o \
+src/core/nginx.c instran
+

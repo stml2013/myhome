@@ -1,0 +1,70 @@
+用gdb来调试、跟踪nginx(一)
+1首先进入nginx的执行文件目录
+cd /usr/local/nginx/sbin //nginx执行文件目录在安装在/usr/local/nginx/sbin
+2然后打开gdb
+sudo gdb
+3在gdb中启动nginx
+(gdb) shell ./nginx
+4查看nginx的进程
+(gdb) shell pidof nginx
+输出：6029(//worker进程) 6028(//master进程)
+5用attach命令跟踪worker进程
+(gdb) attach 6029  //attach +进程ID
+6在ngx_process_events_and_timers处设置断点
+(gdb) break ngx_process_events_and_timers
+7继续执行
+(gdb) c
+然后断点会出现在ngx_process_events_and_timers
+8跟进ngx_epoll_process_events
+(gdb) n
+(gdb) s
+一直到ngx_epoll_process_events (cycle=0x9ebe908, timer=60000, flags=1)
+    at src/event/modules/ngx_epoll_module.c:559
+9继续单独执行
+(gdb) n
+(gdb) s
+events = epoll_wait(ep, event_list, (int) nevents, timer);
+然后程序在停在那里等待epoll_wait返回事件
+10在另一个终端，手动发送一个请求事件
+sudo wget http://127.0.0.1:8080/123.txt
+11这时epoll_wait返回
+(gdb) n
+(gdb) p events
+$9 = 1//返回一个事件
+12返回ngx_process_events_and_timers继续执行
+(gdb) finish
+直到ngx_process_events_and_timers结束
+这时看另一终端，你会发现：
+长度： 87 [text/plain]
+正在保存至: “123.txt.1”
+
+100%[=====================================>] 87          --.-K/s   用时 0s    
+
+2014-10-06 19:21:10 (14.1 MB/s) - 已保存 “123.txt.1” [87/87])
+
+set follow-fork-mode child 
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+gdb backtracem
+(gdb) run
+Starting program: /home/xiaowp/thesis/gcc/code/crash
+Input an integer:10
+
+Program received signal SIGSEGV, Segmentation fault.
+0×4008576b in _IO_vfscanf_internal () from /lib/libc.so.6
+
+仔细分析一下GDB给出的输出结果不难看出，程序是由于段错误而导致异常中止的，说明内存操作出了问题，具体发生问题的地方是在调用_IO_vfscanf_internal ( )的时候。为了得到更加有价值的信息，可以使用GDB提供的回溯跟踪命令backtrace，执行结果如下：
+(gdb) backtrace
+#0 0×4008576b in _IO_vfscanf_internal () from /lib/libc.so.6
+#1 0xbffff0c0 in ?? ()
+#2 0×4008e0ba in scanf () from /lib/libc.so.6
+#3 0×08048393 in main () at crash.c:11
+#4 0×40042917 in __libc_start_main () from /lib/libc.so.6
+
+(gdb) frame 3
+#3 0×08048393 in main () at crash.c:11
+11 scanf("%d", input);
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////
+gdb s 跟进函数

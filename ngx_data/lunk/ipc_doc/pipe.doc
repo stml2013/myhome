@@ -1,0 +1,325 @@
+进程通信之管道
+本节学习进程通信的另一种方式：管道。管道是一个进程连接数据流到另一个进程的通道，它通常把一个进程的输出通过管道连接到另一个进程的输入。在shell命令中经常会看到管道的应用，比如我们要列出当前文件下所有命名中有"test"的文件：ls -l | grep test。其中"|"就代表我们在使用管道，它会把"ls -l"的查询结果通过管道，发送给grep，然后执行"grep test"命令后把结构输出到终端。总之一句话：管道会把一个进程的输出数据，发送给另一进程，作为另一个进程的输入数据。
+一 无名管道
+1无名管道的特点
+1）只能用于具有亲缘关系的进程之间，父子进程，兄弟进程之间通信，因为只有子进程才能继续父进程的文件描述符。
+2）半双共通信（同一时刻只能对管道进行一种操作（读操作或者写操作）），具有读端口和写端口。
+3）管道是一种特殊的文件，可以使用文件io函数（read,write...）来操作，但不能使用lseek函数来定位操作。
+4）管道是在内存中，不用我们主动区删除。
+5）管道是基于队列实现的，有大小限制。
+
+2 pipe函数
+int pipe(int pipefd[2]);
+
+pipe函数创建了一个单向数据通道，这个通道可以用来在进程之间通信。
+pipefd: pipefd数组用来返回两个文件描述符，这两个文件描述符代表了通道的两端。pipefd[0]代表通道的读取端，pipefd[1]代表了通道的写入段。在读取端读取数据，在输写入端口写入数据。
+
+返回值
+函数调用成功返回0
+调用失败返回-1，这时errno存储错误码。
+
+错误码
+EFAULT pipefd数组地址不合法
+EMFILE 进程使用了太多的文件描述符（文件描述符使用达到上限）
+ENFILE 系统已无文件描述符可用
+注意：
+1）不要使用pipefd[0]来写数据，也不要使用pipefd[1]来读取数据，否则其行为是未定义的。
+2）在用pipefd[0]来读数据时，要先关闭pipefd[1];在用pipefd[1]来写入数据时，要关闭pipefd[0]。
+下面是用pipe函数的一个简单列子：
+//test1.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#define  MAXLINE  100
+
+void err_sys(const char *str);
+
+int main()
+{
+	int      n;
+	int      status;
+	int      fd[2];
+	pid_t    pid;
+	char     line[MAXLINE];
+	
+	if (pipe(fd) < 0)
+	{
+		err_sys("pipe error\n");
+	}
+	
+	if ((pid = fork()) < 0)
+	{
+		err_sys("fork error\n");
+	}
+	else if (pid == 0)
+	{
+		close(fd[0]);
+		if (write(fd[1], "hello world\n", sizeof("hello world\n")) == -1)
+		{
+			err_sys("write error\n");
+			
+			exit(-1);
+		}
+	}
+	else 
+	{
+		if (waitpid(pid, &status, 0) != pid)
+		{
+			err_sys("waitpid error\n");
+		}
+
+		if (WIFEXITED(status) == 0)
+		{
+			err_sys("child process exit failed\n");
+		}
+
+		close(fd[1]);
+		n = read(fd[0], line, MAXLINE);
+		write(STDOUT_FILENO, line, n);
+	}
+	
+	
+	return 0;
+}
+
+void err_sys(const char *str)
+{
+	printf("%s", str);
+}
+
+3 popen函数
+FILE *popen(const char *command, const char *type)
+int   pclose(FILE *stream);
+
+popen函数用创建管道的方式启动一个进程，并调用shell来执行command命令。由于管道是单向的，所以type的方式只能是只读或者只写，不能同时读写。返回结果流也相应的是只写或者只读。
+command 参数是一个字符串指针，指向一个以null结束的字符串，这个字符串包含一个shell命令. 这个命令被送到/bin/sh以 -c 参数执行, 即由shell来执行。
+type 参数也是一个指向以null结束符结尾的字符串的指针, 这个字符串必须是'r'或者'w’来指明是读还是写。
+popen()函数的返回值是一个普通的标准I/O流, 它只能用pclose()函数来关闭, 而不是fclose()函数。向这个流的写入被转化为对command命令的标准输入; 而command命令的标准输出则是和调用popen(), 函数的进程相同，除非这个被command命令自己改变；相反的, 读取一个“被popen了的” 流, 就相当于读取command命令的标准输出, 而command的标准输入则是和调用popen函数的进程相同。可以概括为：向这个流写入数据就是command的输入；从这个流读取就是command的输出。注意, popen函数的输出流默认是被全缓冲的。
+pclose函数用于关闭由popen创建出的关联文件流。pclose只在popen启动的进程结束后才返回，如果调用pclose时被调用进程仍在运行，pclose调用将等待该进程结束，并返回一个command命令的退出状态。
+stream是popen函数返回的文件流。
+
+返回值
+popen 如果fork或pipe函数调用失败，或者popen函数不能申请没存，则函数返回NULL。
+pclose 函数调用失败会返回-1。
+
+错误码
+popen函数因为内存错误就不会设置errno,fork或pipe错误就会相应的设置errno；type参数无效，errno会被设置为EINVAL。
+pclose无法获得子进程状态，errno会被设置为ECHILD。
+
+popen函数的优缺点
+优点：在Linux中所有的参数扩展都是由shell来完成的。所以在启动程序（command中的命令程序）之前先启动shell来分析命令字符串，也就可以使各种shell扩展（如通配符）在程序启动之前就全部完成，这样我们就可以通过popen启动非常复杂的shell命令。
+缺点：对于每个popen调用，不仅要启动一个被请求的程序，还要启动一个shell，即每一个popen调用将启动两个进程，从效率和资源的角度看，popen函数的调用比正常方式要慢一些。
+
+下面来看两个列子，以便跟深入的了解popen函数。
+//test2
+用popen来实现一个程序，在管道中让用户输入数据，然后在从管道中取出用户输出的数据，显示在终端。首先实现一个输入程序input.c，然后在testinput.c中用popen调用这个程序，把input的输出作为testinput的输入。
+input.c的代码：
+#include <string.h>
+#include <stdio.h>
+#include <ctype.h>
+
+int main()
+{
+	int  c;
+	//用户输入数据
+	while ((c = getchar()) != EOF)
+	{
+		if (isupper(c))
+		{
+			c = tolower(c);
+		}
+		//输出数据作为testinput的输入数据
+		if (putchar(c) == EOF)
+		{
+			fputs("output error\n", stdout);
+		}
+		
+		if (c == '\n')
+		{
+			fflush(stdout);
+		}
+	}
+	
+	return 0;
+}
+testinput.c的代码：
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#define MAXLINE 100
+
+int main()
+{
+	char   line[MAXLINE];
+	FILE  *fpin;
+	
+	//popen的第一个参数是个命令，这里执行一个可执行文件
+	if ((fpin = popen("./myinput", "r")) == NULL)
+	{
+		fputs("popen error\n", stdout);
+	}
+	
+	for ( ; ; )
+	{
+		fputs("prompt> ", stdout);
+		fflush(stdout);
+		
+		if (fgets(line, MAXLINE, fpin) == NULL)
+		{
+			break;
+		}
+		
+		if (fputs(line, stdout) == EOF)
+		{
+			fputs("fputs error to pipe", stdout);
+		}
+	}
+	
+	if (pclose(fpin) == -1)
+	{
+		fputs("pclose error\n", stdout);
+	}
+	
+	puts("");
+	
+	exit(0);
+}
+//test3模拟ls -s | grep .c命令
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#define MAXSIZE 200
+
+void err_sys(const char *str);
+
+int main()
+{
+	FILE    *fpin;
+	FILE    *fpout;
+	char     line[MAXSIZE+1];
+	
+	memset(line, '\0', sizeof(line));
+	
+	fpin  = popen("ls -l", "r");
+	if (fpin == NULL)
+	{
+		err_sys("popen fpin error\n");
+
+		return -1;
+	}
+
+	fpout = popen("grep .c", "w");
+	if (fpout == NULL)
+	{
+		err_sys("popen fpout error\n");
+		pclose(fpin);
+
+        return -1;
+	}
+	//fgets失败或者读到文件未返回NULL
+	while (fgets(line, MAXSIZE, fpin) != NULL)//从第一次中取出数据
+	{	//fputs成功返回非负，失败返回EOF
+		if (fputs(line, fpout) == EOF)//将取出的数据作为第二次命令的输入
+		{
+			err_sys("fputs error\n");
+		}
+	}
+	
+	pclose(fpin);
+    pclose(fpout);
+
+	return 0;
+}
+
+void err_sys(const char *str)
+{
+	printf("%s", str);
+}
+
+二命名管道
+无名管道只能用来在父子进程或兄弟进程之间进行通信，这就给没有亲缘关系的进程之间数据的交换带来了麻烦，解决这个问题就是本节要学习的另一种管道通信：命名管道。
+命名管道也被称为FIFO文件，FIFO不同于管道之处在于它提供一个路径名与之关联，以FIFO的文件形式存在于文件系统中。这样，即使与FIFO的创建进程不存在亲缘关系的进程，只要可以访问该路径，就能够彼此通过FIFO相互通信（能够访问该路径的进程以及FIFO的创建进程之间），因此，通过FIFO不相关的进程也能交换数据。值得注意的是，FIFO严格遵循先进先出（first in first out），对管道及FIFO的读总是从开始处返回数据，对它们的写则把数据添加到末尾。它们不支持诸如lseek()等文件定位操作。
+1 mkfifo
+int mkfifo(const char *pathname, mode_t mode);
+mafifo函数创建一个FIFO，FIFO在文件系统中表现为一个文件。
+pahtname 文件路径
+mode 和系统调用open函数中的mode是一样的。
+
+返回值
+如果函数调用成功返回非-1；
+函数调用失败返回-1。
+2 命名管道操作
+FIFO在文件系统中表现为一个文件，大部分的系统文件调用都可以用在FIFO上面，比如：read，open，write，close，unlink，stat等函数。但是seek等函数不能对FIFO调用。
+2.1打开命名管道
+可以调用open函数打开命名管道，但是有两点要注意
+1）不能以O_RDWR模式打开命名管道FIFO文件，否则其行为是未定义的，管道是单向的，不能同时读写；
+2）就是传递给open调用的是FIFO的路径名，而不是正常的文件
+打开FIFO文件通常有四种方式：
+open(pathname, O_RDONLY);//1只读、阻塞模式
+open(pathname, O_RDONLY | O_NONBLOCK);//2只读、非阻塞模式
+open(pathname, O_WRONLY);//3只写、阻塞模式
+open(pathname, O_WRONLY | O_NONBLOCK);//只写、非阻塞模式
+注意阻塞模式open打开FIFO:
+1)当以阻塞、只读模式打开FIFO文件时，将会阻塞，直到其他进程以写方式打开访问文件；
+2)当以阻塞、只写模式打开FIFO文件时，将会阻塞，直到其他进程以读方式打开文件；
+3)当以非阻塞方式（指定O_NONBLOCK）方式只读打开FIFO的时候，则立即返回。当只写open时，如果没有进程为读打开FIFO，则返回-1，其errno是ENXIO。
+下面是一个命名管道的例子：
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

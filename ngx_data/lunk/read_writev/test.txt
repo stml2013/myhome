@@ -1,0 +1,4 @@
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt);
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
+The readv() system call reads iovcnt buffers from the  file  associated with the file          descriptor fd into the buffers described by iov ("scatter input")
+
