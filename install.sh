@@ -15,27 +15,31 @@ if [ ! -d "$tmp_dir" ]; then
 fi
 
 if [ ! -d "$zlib_path" ]; then
-    wget http://zlib.net/zlib-1.2.8.tar.gz
-    tar -zxf zlib-1.2.8.tar.gz
-    mv zlib-1.2.8 $zlib_path 
+    wget https://jaist.dl.sourceforge.net/project/libpng/zlib/1.2.11/zlib-1.2.11.tar.gz 
+    tar -zxf zlib-1.2.11.tar.gz
+    mv zlib-1.2.11 $zlib_path 
+    rm zlib-1.2.11.tar.gz
 fi
 
 if [ ! -d "$openssl_path" ]; then
     wget https://www.openssl.org/source/openssl-1.0.1t.tar.gz
     tar -zxf openssl-1.0.1t.tar.gz
     mv openssl-1.0.1t $openssl_path 
+    rm openssl-1.0.1t.tar.gz
 fi
 
 if [ ! -d "$pcre_path" ]; then
     wget http://downloads.sourceforge.net/project/pcre/pcre/8.35/pcre-8.35.tar.gz
     tar -zxf pcre-8.35.tar.gz
     mv pcre-8.35 $pcre_path
+    rm pcre-8.35.tar.gz
 fi
 
 cd ./nginx_1015
 
 ./configure --prefix=$prefix \
     --with-openssl=$openssl_path \
+    --with-zlib=$zlib_path \
     --with-pcre=$pcre_path \
     --with-http_stub_status_module \
     --with-http_ssl_module
