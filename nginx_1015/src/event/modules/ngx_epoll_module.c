@@ -632,9 +632,9 @@ ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
 	//开始处理返回的事件
     for (i = 0; i < events; i++) {
 		//取出ptr=(ngx_connection_t*)&(instance)
-        c = event_list[i].data.ptr;
+        c = event_list[i].data.ptr; 
 		
-        instance = (uintptr_t) c & 1;//获取是否过期标志
+        instance = (uintptr_t) c & 1;//获取是否过期标志，在ngx_get_connection中重置instance
 		//获取ngx_connection_t连接的指针=c&(~1),就是把最后一位置为0
         c = (ngx_connection_t *) ((uintptr_t) c & (uintptr_t) ~1);
 
