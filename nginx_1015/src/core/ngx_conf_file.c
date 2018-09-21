@@ -240,7 +240,7 @@ ngx_conf_parse(ngx_conf_t *cf, ngx_str_t *filename)
             goto failed;
         }
 
-
+        // 这里会调用各个配置的ngx_command_t中的set函数
         rc = ngx_conf_handler(cf, rc);
 
         if (rc == NGX_ERROR) {
